@@ -1,0 +1,715 @@
+---
+title: "Posterior inference"
+output:
+  html_document:
+    df_print: paged
+    mathjax: "default"
+---
+
+**TA**: Andrea Viselli ([andrea.viselli\@polimi.it](mailto:andrea.viselli@polimi.it))
+
+## 1. Posterior Inference
+
+---
+
+### Point Estimates
+
+Once we have specified a Bayesian model, consisting of a **likelihood function** and a **prior distribution**, we obtain the **posterior distribution** $\pi(\theta \mid x_1,\dots,x_n)$. The posterior distribution encapsulates all available information about the parameter $\theta$ after observing the data. To summarize this distribution and make decisions, we often use point estimates.
+
+A fundamental decision problem in Bayesian inference involves choosing an optimal estimate $d \in D$ for $\theta$. This requires defining a **loss function**, which quantifies the cost of selecting $d$ when the true parameter value is $\theta$.
+
+A **loss function** is a function $L(\theta,d): \Theta \times D \to \mathbb{R}_{+}$, where $\Theta$ is the parameter space and $D$ is the decision space. The optimal statistical decision $\delta(\mathbf{x})$ is the one that minimizes the expected posterior loss.
+
+#### Bayes Estimate
+
+A **Bayes estimate** associated with a prior $\pi(\theta)$ and a loss function $L$ is given by:
+
+$$
+\widehat{d}(x) = \arg\min_{\delta} \mathbb{E}^{\pi} \left[ L(\theta, \delta(x)) \mid \mathbf{x} \right],
+$$
+
+i.e., it is the decision that minimizes the expected loss under the posterior distribution.
+
+#### Common Examples
+
+| Loss Function       | Definition                                                                                                      | Bayes Estimate   | Definition                                                                                 |
+|-----------------|--------------------------|-----------------|--------------------|
+| Quadratic Loss      | $L [\theta,\delta ( \mathbf{x})] = [ \theta - \delta (\mathbf{x})]^2$                                           | Posterior Mean   | $\theta_{mean}(\mathbf{x}) = \mathbb{E}^{ \,\pi}\left[\, \theta \mid \mathbf{x} \,\right]$ |
+| Absolute Value Loss | $L\left[\theta,\delta\left( \mathbf{x}\right )\right] = \left | \theta - \delta\left(\mathbf{x }\right)\right|$ | Posterior Median | $\theta_{med}(\mathbf{x}) = \text{median of } \pi( \theta \mid \mathbf{x})$    
+
+For example, to verify why the posterior mean minimizes the quadratic loss, consider $L[\theta,d] = [\theta - d]^2$. Since this function is strictly convex, we differentiate $\mathbb{E}^{\pi}[(\theta - d)^2 \mid x]$ with respect to $d$ and set the derivative to zero, obtaining $d = \mathbb{E}^{\pi}[\theta \mid x]$.
+
+#### Maximum A Posteriori Estimator (MAP)
+
+When no loss function is explicitly specified, an alternative estimator is the **Maximum A Posteriori (MAP) estimator**:
+
+$$
+\theta_{\text{MAP}}(\mathbf{x}) = \arg\max_{\theta} \, f(\mathbf{x} \mid \theta) \pi(\theta),
+$$
+
+i.e., the mode of the posterior distribution. The MAP estimator is closely related to the Maximum Likelihood Estimator (MLE) from frequentist statistics, as it returns the most likely parameter value given the observed data.
+
+---
+
+### Interval Estimates
+
+Point estimates provide a single-value summary of $\theta$, but in many applications, we need to quantify the uncertainty around these estimates. Since continuous random variables have zero probability mass at any single point, interval estimates are more informative.
+
+In Bayesian analysis, credible intervals are used to quantify parameter uncertainty based on the posterior distribution.
+
+#### Credible Region
+
+A **credible region** $C_{\alpha}(\mathbf{x})$ of level $1 - \alpha$ for $\theta$ satisfies:
+
+$$
+\pi \big\{ \theta \in C_{\alpha}(\mathbf{x}) \mid \mathbf{x} \big\} = 1 - \alpha.
+$$
+
+Standard choices for $\alpha$ include 0.05 and 0.01.
+
+#### Frequentist Confidence Intervals vs. Bayesian Credible Intervals
+
+In frequentist statistics, the equivalent concept is the **confidence interval**, which is defined by the following property:
+
+$$
+P \big\{ \theta_{\text{true}} \in C_{\alpha}(\mathbf{x}) \big\} = 1 - \alpha \, \text{ over repeated samples}.
+$$
+
+where $C_{\alpha}(\mathbf{x})$ is a random interval. Unlike Bayesian credible intervals, which provide a probability statement about $\theta$, frequentist confidence intervals do not make probabilistic claims about the parameter itself. Instead, they guarantee that, in repeated sampling, a proportion $1-\alpha$ of constructed confidence intervals will contain the true parameter value.
+
+| Approach       | Interpretation |
+|---------------|-------------------------------------------------------------------------------------------|
+| **Bayesian**  | "Given the observed data, there is a $1-\alpha$% probability that $\theta$ falls within $C_\alpha$." |
+| **Frequentist** | "If we repeatedly compute confidence intervals from new samples, $1-\alpha$% of them will contain $\theta_{\text{true}}$." |
+
+---
+
+#### Highest Posterior Density (HPD) Regions
+
+An alternative way to construct Bayesian interval estimates is through the **Highest Posterior Density (HPD) region**, which is defined as:
+
+$$
+C_\alpha = \big\{ \theta \mid \pi(\theta \mid \mathbf{x}) > k_{\alpha} \big\},
+$$
+
+where $k_{\alpha}$ is chosen so that $C_{\alpha}$ has probability mass $1 - \alpha$. HPD regions have the property that all points inside the region have higher posterior density than those outside for a given probability level.
+
+#### The Difference Between Credible Intervals and HPD Regions
+
+A **credible interval (CI)** of level $1 - \alpha$ is any interval $[a, b]$ such that:
+
+$$
+\pi(a \leq \theta \leq b \mid x) = 1 - \alpha.
+$$
+
+A common choice is the **equal-tailed credible interval**, which assigns $\alpha/2$ probability to each tail:
+
+$$
+\pi(\theta \leq a \mid x) = P(\theta \geq b \mid x) = \alpha/2.
+$$
+
+However, **the credible interval does not necessarily require $a$ and $b$ to be symmetric around the posterior mean or median**. Thus, the interval $[a, b]$ can be generally chosen in arbitrary ways.
+
+A **highest posterior density (HPD) region** is the region where the posterior density is maximized while maintaining the probability mass, or density, equal to $1 - \alpha$. That is, it contains all values of $\theta$ for which:
+
+$$
+\pi(\theta \mid x) \geq k_{\alpha}
+$$
+
+for some threshold $k_{\alpha}$, ensuring that the total posterior probability in the region is $1 - \alpha$.
+
+### Summary and key differences
+
+- **Point estimates**: Bayes estimators minimize expected posterior loss; MAP estimates the *mode* of the posterior.
+- **Interval estimates**: Credible intervals provide probabilistic statements about $\theta$, whereas confidence intervals describe repeated sampling properties.
+- **HPD regions**: Bayesian smallest possible intervals for $\theta$ containing $1-\alpha$% of the posterior probability density.
+- If the posterior distribution is **symmetric and unimodal**, the HPD and equal-tailed credible intervals coincide.
+- If the posterior is **asymmetric** (e.g. skewed distributions), the HPD region is typically **shorter** than the equal-tailed credible interval.
+- If the posterior is **multimodal**, the HPD region may be **disconnected**, while the equal-tailed credible interval remains a single continuous interval.
+
+---
+
+
+### *Example: Normal -- Normal Model*
+
+We assume that the data consists of $n$ independent and identically distributed (i.i.d.) observations from a normal distribution:
+
+$$
+\newcommand{\iid}{\stackrel{\small\mathrm{iid}}{\sim}}
+\begin{align*}
+  x_1,\dots,x_n \mid \mu &\iid \mathscr{N}(\mu,\sigma^2) \\[5pt]
+  \mu &\sim \mathscr{N}(\mu_0,\tau^2)
+\end{align*}
+$$
+
+Given the prior and the likelihood, the posterior distribution of $\mu$ remains normal:
+
+$$
+\mu \mid \mathbf{x} \sim \mathscr{N}(\mu_n,\sigma^2_n),
+$$
+
+where the posterior mean $\mu_n$ and posterior variance $\sigma^2_n$ are given by:
+
+$$
+\begin{align*}
+\mu_n &= \frac{\sigma^2}{\sigma^2+n \tau^2} \mu_0 +  \frac{n \tau^2}{\sigma^2+n \tau^2} \bar{x}, \\
+\sigma_n^2 &= \frac{\sigma^2\tau^2}{\sigma^2+n \tau^2}.
+\end{align*}
+$$
+
+Consider a case where $n = 30$ i.i.d. samples are drawn from $\mathscr{N}(\mu, \sigma^2=4)$, and we assume the prior distribution $\mu \sim \mathscr{N}(\mu_0=2, \sigma^2_0=8)$. We take the true mean to be $\mu = 0.8$.
+
+Now, we simulate the dataset and compute posterior quantities:
+
+```{r}
+# Fixed variance
+n <- 30
+mu_true <- 0.8
+sig2 <- 10
+
+# Simulated dataset
+set.seed(123)
+data <- rnorm(n, mu_true, sqrt(sig2))
+
+# Sample mean
+m.samp <- mean(data)
+
+# Prior parameters
+mu.0 <- 2
+tau2 <- 100
+```
+
+To visualize the impact of the observed data on the prior belief, we plot the prior and posterior distributions:
+
+```{r}
+# Prior density
+curve(dnorm(x,mean=mu.0,sd=sqrt(tau2)),-6, 10, lty=1, col='red',
+      ylab="Density", xlab=expression(mu),lwd=2, ylim=c(0,.65), n=1000)
+
+# Posterior parameters
+mu.post <- (mu.0*sig2+n*m.samp*tau2)/(sig2+n*tau2)
+var.post <- sig2*tau2/(sig2+n*tau2)
+
+# Posterior density
+curve(dnorm(x,mean=mu.post,sd=sqrt(var.post)),-6,10,lty=1, col='blue',
+      lwd=2, n=1000, add=T)
+
+# Add legend
+legend("topright", c("Prior","Posterior"),
+       lty = 1, lwd=2, col=c("red", "blue"))
+```
+
+We compute the Bayesian point estimates (posterior mean, median, and MAP) both theoretically and through simulation, along with the frequentist maximum likelihood estimate (MLE):
+
+```{r}
+# Draw samples from posterior
+post_sample <- rnorm(1e4, mu.post, sqrt(var.post))
+
+# Compute estimates
+mu.mean <- mean(post_sample)
+mu.median <- median(post_sample)
+mu.map <- density(post_sample)$x[which.max(density(post_sample)$y)]
+
+# Theoretical posterior estimates
+mu.mean_th <- mu.post
+mu.median_th <- mu.post
+mu.map_th <- mu.post
+
+# Frequentist estimate (MLE)
+mu.mle <- m.samp
+
+# Summary
+resume <- data.frame(
+  source = c("Theoretical","Simulated"),
+  mean = c(mu.mean_th,mu.mean),
+  median = c(mu.median_th,mu.median),
+  MAP = c(mu.map_th,mu.map))
+
+cat(paste("Frequentist estimate (MLE):", mu.mle, "\n"))
+print(resume)
+```
+
+Differences in the MAP and MLE estimates reveal, once again, the role of the prior. In particular, for the Normal -- Normal model, since $\widehat{\mu}_{MAP} = \mu_n$, i.e. a weighted average of the prior mean $\mu_0$ and the sample mean $\bar{x}$, with weights depending on the prior and likelihood variances, whereas $\widehat{\mu}_{MLE} = \bar{x}$, then the Normal prior acts as a regularizer, shrinking the estimate toward the prior mean.
+
+For interval estimation, we compute Credible Sets (CS) and Highest Posterior Density (HPD) regions. Since the posterior distribution is normal, the CS and HPD coincide:
+
+```{r}
+# Compute CS (HPD) at 95% level
+CS.prior<-qnorm(c(0.025,0.975),mu.0,sqrt(tau2))
+CS.post<-qnorm(c(0.025,0.975),mu.post,sqrt(var.post))
+
+# Plot intervals
+curve(dnorm(x,mean=mu.0,sd=sqrt(tau2)),-6,10,n=1000,lty=1,
+      ylab="Density", xlab=expression(mu),lwd=2, ylim=c(0,.65), col="red")
+curve(dnorm(x,mean=mu.post,sd=sqrt(var.post)),-6,10,n=1000,lty=1,
+      lwd=2,col="blue",add=T)
+abline(v=mu_true,lty=4,lwd=2,col='forestgreen')
+lines(CS.prior, dnorm(CS.prior,mu.0,sqrt(tau2)),
+      col="darkorange",lwd=2,lty=2)
+points(CS.prior, dnorm(CS.prior,mu.0,sqrt(tau2)),
+       col="darkorange", pch=19, cex=1.7)
+lines(CS.post, dnorm(CS.post,mu.post,sqrt(var.post)),
+      col="steelblue",lwd=2,lty=2)
+points(CS.post, dnorm(CS.post,mu.post,sqrt(var.post)),
+       col="steelblue", pch=19, cex=1.7)
+legend("topright",
+       c("Prior","Posterior", "CS.prior","CS.post", "True"),
+       lty=c(1,1,NA,NA,4),lwd=2,
+       pch=c(NA,NA,19,19,NA),
+       col=c('red','blue','darkorange','steelblue','forestgreen'))
+```
+
+---
+
+
+### *Example: Exponential-Gamma Model*
+
+We consider a sample $x_1, \dots, x_n$ of i.i.d. observations from an Exponential distribution with parameter $\lambda$, conditional on $\lambda$. As a prior, we assume $\lambda \sim \mathscr{G}a(\alpha, \beta)$, forming the Exponential-Gamma model:
+
+$$
+\begin{aligned}
+  x_i \mid \lambda &\sim \mathscr{E}xp(\lambda), \quad i=1,\dots,n\\
+  \lambda &\sim \mathscr{G}a(\alpha, \beta)
+\end{aligned}
+$$
+
+Applying Bayes' theorem, the posterior is:
+
+$$
+\begin{equation}
+  \pi(\lambda \mid \mathbf{x}) \propto \lambda^{\alpha + n - 1} e^{-\left(\beta + \sum_{i=1}^{n}x_i\right)\lambda}.
+\end{equation}
+$$
+
+Hence,
+
+$$
+  \lambda \mid \left(x_1,\dots,x_n\right) \sim \mathscr{G}a(\alpha + n, \beta + \textstyle\sum_{i=1}^{n}x_i).
+$$
+
+We generate a dataset with sample size $n$ and true parameter $\lambda = \frac{1}{3}$, assuming a $\mathscr{G}a(1,1)$ prior.
+
+```{r}
+# Sample size and true parameter
+n <- 10
+lambda_true <- 1/3
+
+# Simulated dataset
+set.seed(123)
+data <- rexp(n, lambda_true)
+
+# Sample quantities
+m.samp <- mean(data)
+tot.samp <- n * m.samp
+
+# Prior hyperparameters
+a <- 1
+b <- 1
+```
+
+We plot the prior and posterior distributions.
+
+```{r}
+# Prior and posterior plots
+curve(dgamma(x, shape=a, rate=b), 0, 5, n=1000, lty=1, lwd=2, col='red',
+      ylab="Density", xlab=expression(lambda), ylim=c(0,4))
+curve(dgamma(x, shape=n+a, rate=tot.samp+b), 0, 5, n=1000, lty=1, lwd=2, col='blue', add=T)
+legend("topright", c("Prior", "Posterior"), lty=1, lwd=2, col=c('red', 'blue'))
+```
+
+We compute Bayesian and frequentist estimates of $\lambda$.
+
+```{r}
+# Posterior parameters
+a.post <- a + n
+b.post <- b + tot.samp
+
+# Draw samples from posterior
+post_sample <- rgamma(1e4, a.post, b.post)
+
+# Bayesian estimates
+lam.mean <- mean(post_sample)
+lam.median <- median(post_sample)
+lam.map <- density(post_sample)$x[which.max(density(post_sample)$y)] # Using kernel density estimate
+
+# Theoretical Bayesian estimates
+lam.mean_th <- a.post/b.post
+lam.median_th <- qgamma(0.5, a.post, b.post)
+lam.map_th <- (a.post - 1)/b.post
+
+# Frequentist MLE
+lam.mle <- 1/m.samp
+
+# Summary dataframe
+resume <- data.frame(
+  source = c("Theoretical", "Simulated"),
+  mean = c(lam.mean_th, lam.mean),
+  median = c(lam.median_th, lam.median),
+  MAP = c(lam.map_th, lam.map)
+)
+
+cat(paste("Frequentist estimate (MLE):", lam.mle, "\n"))
+print(resume)
+```
+
+We compute a 95% credible set using quantiles.
+
+```{r}
+# 95% credible interval
+CS <- qgamma(c(0.025, 0.975), shape=a.post, rate=b.post)
+
+# Plot posterior with credible interval
+curve(dgamma(x, shape=a.post, rate=b.post), 0, 1.5, n=1000, lty=1, lwd=2,
+      ylab="Posterior", xlab=expression(lambda))
+lines(CS, dgamma(CS, a.post, b.post), lty=2, lwd=2, col='steelblue')
+points(CS, dgamma(CS, a.post, b.post), pch=19, col='steelblue', cex=1.7)
+legend("topright", "Credible Set", lty=2, lwd=2, col='steelblue')
+```
+
+We find the highest posterior density (HPD) region for $\lambda$ iteratively.
+
+```{r}
+# Iterative search for HPD region
+h <- seq(0.35, 0.4, by=0.001)
+results <- matrix(NA, ncol=3, nrow=length(h))
+for (i in 1:length(h)) {
+  shift <- function(x) dgamma(x, a.post, b.post) - h[i]
+  hpd1 <- uniroot(shift, c(0.001, 0.5))$root
+  hpd2 <- uniroot(shift, c(0.6, 1))$root
+  int <- integrate(dgamma, lower=hpd1, upper=hpd2, a.post, b.post)$value
+  results[i, ] <- c(hpd1, hpd2, int)
+  if (int <= 0.95) break
+}
+hpd <- results[i - 1, 1:2]
+
+# Plot HPD region
+curve(dgamma(x, a.post, b.post), 0.1, 1.2, n=1000, lty=1, lwd=2, col='black',
+      ylab="Posterior", xlab=expression(lambda))
+lines(hpd, dgamma(hpd, a.post, b.post), col='darkorange', lwd=2, lty=2)
+points(hpd, dgamma(hpd, a.post, b.post), col='darkorange', pch=19, cex=1.7)
+legend("topright", "HPD", col="darkorange", lwd=2, lty=2)
+```
+
+**Step-by-Step Breakdown:**
+
+- Define a sequence of threshold values (`h`);
+- Initialize a matrix to store results (`results`);
+- Iterate over candidate threshold values (`h[i]`)
+- Define a function to find intersection points (`shift`): the roots (i.e., where `shift(x) = 0`) are the points -- that is, the quantiles -- where the posterior density crosses the threshold;
+- Find the HPD interval (`hpd1`, `hpd2`);
+- Compute the total probability mass in this interval (`int`);
+- Store results and check if the probability is at least 95% (`hpd`).
+
+Alternatively, we can use the function `hpd` from the `TeachingDemos` package, together with a different plot style.
+
+```{r}
+# Load the `TeachingDemos` package
+library(TeachingDemos)
+hpd = hpd(qgamma, shape=a.post, rate=b.post)
+
+# Plot HPD region
+hpd1 <- hpd[1]  # Lower bound
+hpd2 <- hpd[2]  # Upper bound
+
+# Generate x values for plotting
+x_vals <- seq(0, qgamma(0.999, shape = a.post, rate = b.post), length.out = 500)
+y_vals <- dgamma(x_vals, shape = a.post, rate = b.post)
+
+# Base plot
+plot(x_vals, y_vals, type = "l", lwd = 2, col = "black",
+     xlab = expression(lambda), ylab = "Posterior", 
+     main = "Posterior Gamma Density with HPR")
+
+# Shade the correct HPR region
+polygon(c(hpd1, x_vals[x_vals >= hpd1 & x_vals <= hpd2], hpd2), 
+        c(0, y_vals[x_vals >= hpd1 & x_vals <= hpd2], 0),
+        col = "lightblue", border = NA)
+
+# Add vertical lines for HPR bounds
+abline(v = hpd1, col = "blue", lty = 2, lwd = 2)
+abline(v = hpd2, col = "blue", lty = 2, lwd = 2)
+
+# Add legend
+legend("topright", legend = c("Posterior Density", "HPR (95%)"),
+       col = c("black", "blue"), lwd = c(2, 2), lty = c(1, 2), bty = "n")
+```
+
+---
+
+
+### Bayesian Hypothesis Testing and the Bayes Factor
+
+The validity of a hypothesis is assessed by testing a parameter $\theta$ using observed data. We consider the problem of testing the null hypothesis $H_0$ against the alternative $H_1$:
+
+$$
+\begin{cases}
+H_0: \theta \in \Theta_0 \\[5pt]
+H_1: \theta \in \Theta_1
+\end{cases}
+$$
+
+where $\Theta_0$ and $\Theta_1$ are disjoint but not necessarily complementary subsets of $\mathbb{R}^p$. The data-generating process follows:
+
+$$
+\mathbf{X} \mid \theta \sim f(\mathbf{x} \mid \theta), \quad \theta \in \Theta \subseteq \mathbb{R}^p, \quad \theta \sim \pi(\cdot)
+$$
+
+where $\pi(\cdot)$ is a prior distribution over $\Theta$.
+
+#### Posterior Probability and Hypothesis Selection
+In the Bayesian framework, hypothesis selection is straightforward once the posterior distribution is known. Intuitively, the preferred hypothesis corresponds to the region with the highest posterior probability. Specifically, if:
+
+$$
+\mathbb{P}\left(\theta \in \Theta_0 \mid \mathbf{x}\right) \gg \mathbb{P}\left(\theta \in \Theta_1 \mid \mathbf{x}\right),
+$$
+
+then $H_0$ is favored over $H_1$.
+
+#### Bayes Factor
+A formal decision criterion is given by the **Bayes Factor**:
+
+$$
+B_{10}^{\pi} = \frac{\pi(\theta \in \Theta_1 \mid \mathbf{x}) \pi(\theta \in \Theta_0)}{\pi(\theta \in \Theta_0 \mid \mathbf{x}) \pi(\theta \in \Theta_1)} = \frac{m_1(x)}{m_0(x)}
+$$
+which represents the ratio of the marginal likelihoods of the data under the two competing hypotheses. This formulation minimizes the influence of prior distributions on the decision.
+
+#### Jeffreys' Scale for Interpreting the Bayes Factor
+The strength of evidence against $H_0$ is commonly assessed using **Jeffreys' Scale**:
+
+| $\log_{10}(B_{10}^{\pi})$ | Evidence against $H_0$ |
+|--------------------------------|------------------------------|
+| $(0, 0.5)$                 | *Poor Evidence*             |
+| $(0.5, 1)$                 | *Substantial Evidence*      |
+| $(1, 2)$                   | *Strong Evidence*           |
+| $(2, +\infty)$             | *Decisive Evidence*         |
+
+The Bayes Factor is symmetric, meaning that a negative $B_{10}^{\pi}$ value provides evidence in favor of $H_0$ using the same scale.
+
+#### Rewriting the Bayes Factor in Terms of Odds
+The Bayes Factor can be rewritten to highlight prior and posterior odds:
+
+$$
+B_{10}^{\pi} = \frac{\pi(\theta \in \Theta_1 \mid \mathbf{x})}{\pi(\theta \in \Theta_0 \mid \mathbf{x})} \div \frac{\pi(\theta \in \Theta_1)}{\pi(\theta \in \Theta_0)} = \frac{\text{Posterior Odds}}{\text{Prior Odds}}
+$$
+
+This formulation is particularly useful when the marginal distributions of the data under each hypothesis are difficult to compute, providing a practical alternative for Bayesian hypothesis testing.
+
+---
+
+
+### *Example: Normal -- Normal - Inverse Gamma Model*
+
+We analyze the `normaldata` dataset, which consists of the relative changes in reported larcenies between $1991$ and $1995$ (relative to $1991$) for the $90$ most populous U.S. counties. A negative value indicates a decrease in larcenies over this period. Our objective is to determine whether there is a significant increase in the number of larcenies in this period, setting this as our null hypothesis.
+
+We adopt a Normal -- Normal - Inverse Gamma model, as both $\mu$ and $\sigma^2$ are unknown. Then,
+
+$$
+\begin{aligned}
+  x_1,\dots,x_n \mid \mu, \sigma^2 &\overset{\text{iid}}{\sim} \mathscr{N}\left(\mu, \sigma^2\right) \\[5pt]
+  \mu \mid \sigma^2 &\sim \mathscr{N}\left(\mu_0, \sigma^2 / k_{0}\right) \\[5pt]
+  \sigma^2 &\sim \mathscr{IG}\left(\alpha_0, \beta_0\right)
+\end{aligned}
+$$
+
+where the prior hyperparameters are chosen as $\left(\mu_0,k_0,\alpha_0,\beta_0\right) = \left(0, 0.1, 0.1, 0.1\right)$. We aim to test the hypothesis:
+
+$$
+\begin{cases}
+  H_0:\, \mu > 0, \\[5pt]
+  H_1:\, \mu \leq 0.
+\end{cases}
+$$
+Using an alternative notation, $\Theta_0 = (0,+\infty)$ is the acceptance region, and $\Theta_1 = (-\infty,0]$ is the rejection region.
+
+```{r}
+# Import dataset (+ recast)
+normaldata <- read.table("normaldata.txt", header = TRUE)
+normaldata <- stack(normaldata)$values
+
+# Plot
+density_plot <- hist(normaldata, probability = T, breaks = 50, xlab="Data", main="")
+```
+
+```{r}
+# Prior hyperparameters
+mu.0 <- 0
+k.0 <- 0.1
+a.0 <- 0.1
+b.0 <- 0.1
+
+# Summary statistics
+n <- length(normaldata)
+S2 <-  (n-1)*var(normaldata)
+x_bar <- mean(normaldata)
+  
+# Posterior Parameters
+mu.post <- (k.0*mu.0 + n*x_bar)/(k.0 + n)
+k.post <- k.0 + n
+a.post <- a.0 + n/2
+b.post <- b.0 + S2/2 + (n*k.0*(mu.0 - x_bar)^2)/(2*(k.0 + n))
+```
+
+#### Method 1: Closed-form Bayes Factor Calculation
+
+First, we consider the marginal distributions for the prior and posterior mean:
+
+$$
+\begin{aligned}
+  \mu &\sim \mathscr{T}_{2\alpha_0}\left(\mu_0, \beta_0/(\alpha_0 k_0)\right), \\[5pt]
+  \mu \mid \mathbf{x} &\sim \mathscr{T}_{2\alpha_n}\left(\mu_n, \beta_n/(\alpha_n k_n)\right),
+\end{aligned}
+$$
+
+which are used to compute the prior and posterior probability of the rejection region $\Theta_1$ -- or, alternatively, of $H_1$ -- that is:
+
+$$
+\begin{aligned}
+  \pi\left(\mu \leq 0\right) &= F_{t,2\alpha_0}\left(\frac{\mu_0}{\sqrt{\beta_0 / (\alpha_0 k_0)}}\right), \\[5pt]
+  \pi\left(\mu \leq 0 \mid \mathbf{x}\right) &= F_{t,2\alpha_n}\left(\frac{\mu_n}{\sqrt{\beta_n / (\alpha_n k_n)}}\right).
+\end{aligned}
+$$
+
+We write the `R` code according to the BF definition. More specifically, the numerator is associated to $H_1$, while the denominator to $H_0$. Hence, a ratio that is greater than $1$ should provide evidence towards $H_1$, or alternatively that the rejection region $\Theta_1$ has a higher probability.
+
+```{r}
+library("LaplacesDemon")
+
+# Compute Prior Odd
+odd.prior <- (pst(0,mu.0,sqrt(b.0/(a.0*k.0)), 2*a.0)) /
+  (1-pst(0, mu.0, sqrt(b.0/(a.0*k.0)), 2*a.0))
+
+# Compute Posterior Odd
+odd.post <- (pst(0,mu.post,sqrt(b.post/(a.post*k.post)), 2*a.post)) /
+  (1-pst(0, mu.post, sqrt(b.post/(a.post*k.post)), 2*a.post))
+
+# Compute BF10
+logBF10 <- log10(odd.post / odd.prior)
+print(logBF10)
+```
+
+The `logBF10` is greater than 2. Thus, according to the Jeffreys' scale, a decisive evidence against $H_0$ is observed.
+
+#### Method 2: Monte Carlo Approximation
+If $\pi(\theta \mid \mathbf{x})$ is not available in closed form, we can approximate it via Monte Carlo integration.
+
+```{r}
+# Draw a sample from the posterior distribution
+NIG_rng <- function(n, mu, k, a, b) {
+  out <- matrix(NA,n,2)
+  out[,2] <- 1/rgamma(n,a,b)
+  out[,1] <- rnorm(n, mu, sqrt(out[,2]/k))
+  return(out)
+}
+
+# Sampling
+Npost <- 1e5
+prior_sample <- NIG_rng(Npost,mu.0,k.0,a.0,b.0)
+post_sample <- NIG_rng(Npost,mu.post,k.post,a.post,b.post)
+
+# Compute Prior Odd
+odd.prior <- (length(which(prior_sample[,1] <= 0)) / Npost) /
+  (length(which(prior_sample[,1] > 0)) / Npost)
+
+# Compute Posterior Odd
+odd.post <- (length(which(post_sample[,1] <= 0)) / Npost) /
+  (length(which(post_sample[,1] > 0)) / Npost)
+
+# Compute BF10
+logBF10 <- log10(odd.post / odd.prior)
+print(logBF10)
+```
+
+Both methods confirm strong evidence against $H_0$, suggesting a significant decrease in larcenies from $1991$ to $1995$. The Monte Carlo method provides a flexible alternative when analytical solutions are not feasible.
+
+### *Example: point null hypothesis and the Jeffreys-Lindley paradox*
+
+We consider a Bayesian hypothesis test for $H_0: \mu = 0$ against $H_1: \mu \neq 0$, where:
+
+- The data-generating process follows:
+  $$x \mid \mu \sim \mathscr{N}(\mu, \sigma^2)$$
+- The prior for $\mu$ under $H_1$ is:
+  $$\mu \sim \mathscr{N}(\xi, \tau^2)$$
+  with prior mean $\xi = 0$ for simplicity.
+
+To test this **point null hypothesis**, we need to derive the posterior probability:
+
+$$
+\pi(\mu = 0 \mid x) = \frac{f(x \mid \mu = 0) \rho}{f(x \mid \mu = 0) \rho + m_1(x) (1 - \rho)}
+$$
+
+where:
+
+- $\rho = \pi(\mu = 0)$ is the prior probability assigned to $H_0: \mu = 0$,
+- $f(x \mid \mu = 0)$ is the likelihood under $H_0$,
+- $m_1(x)$ is the marginal likelihood under $H_1$.
+
+Since $x \sim \mathscr{N}(\mu, \sigma^2)$, under $H_0$, the likelihood is:
+
+$$
+f(x \mid \mu = 0) = \frac{1}{\sqrt{2\pi\sigma^2}} \exp\left(-\frac{x^2}{2\sigma^2} \right)
+$$
+
+Under $H_1$, we obtain the marginal likelihood by integrating out $\mu$:
+
+$$
+m_1(x) = \int f(x \mid \mu) \pi(\mu) d\mu
+$$
+
+where:
+
+$$
+f(x \mid \mu) = \frac{1}{\sqrt{2\pi\sigma^2}} \exp\left(-\frac{(x-\mu)^2}{2\sigma^2} \right)
+$$
+
+Since $\mu \sim \mathscr{N}(0, \tau^2)$, this integral results in:
+
+$$
+m_1(x) = \frac{1}{\sqrt{2\pi(\sigma^2+\tau^2)}} \exp\left(-\frac{x^2}{2(\sigma^2+\tau^2)}\right)
+$$
+
+Now, substitute these expressions into the formula for the posterior mean:
+
+$$
+\begin{aligned}
+\pi(\mu = 0 \mid x) 
+&= \frac{ \frac{1}{\sqrt{2\pi\sigma^2}} \exp\left(-\frac{x^2}{2\sigma^2} \right) \rho }
+{ \frac{1}{\sqrt{2\pi\sigma^2}} \exp\left(-\frac{x^2}{2\sigma^2} \right) \rho + \frac{1}{\sqrt{2\pi(\sigma^2+\tau^2)}} \exp\left(-\frac{x^2}{2(\sigma^2+\tau^2)} \right) (1 - \rho)} \\
+&= \frac{ \rho \frac{1}{\sqrt{\sigma^2}} \exp\left(-\frac{x^2}{2\sigma^2} \right) }
+{\rho \frac{1}{\sqrt{\sigma^2}} \exp\left(-\frac{x^2}{2\sigma^2} \right) + (1 - \rho) \frac{1}{\sqrt{\sigma^2+\tau^2}} \exp\left(-\frac{x^2}{2(\sigma^2+\tau^2)} \right)} \\
+&= \left[ 1 + \frac{1 - \rho}{\rho} \sqrt{\frac{\sigma^2}{\sigma^2 + \tau^2}} \exp\left(\frac{\tau^2 x^2}{2\sigma^2(\sigma^2 + \tau^2)} \right) \right]^{-1}.
+\end{aligned}
+$$
+
+```{r}
+# Define function to compute posterior probability
+posterior_H0 <- function(z, rho, tau2, sigma) {
+  ratio <- sqrt(sigma^2 / (sigma^2 + tau2))
+  exponent <- (tau2 * (z^2)) / (2 * sigma^2 * (sigma^2 + tau2))
+  return(1 / (1 + ((1 - rho) / rho) * ratio * exp(exponent)))
+}
+
+# Define parameters
+rho <- 1/2
+sigma <- 1  # Normalization
+tau2_1 <- sigma^2
+tau2_2 <- 10 * sigma^2
+z_values <- c(0, 0.68, 1.28, 1.96)
+
+# Compute posterior probabilities for different tau values
+posterior_tau1 <- sapply(z_values, posterior_H0, rho=rho, tau2=tau2_1, sigma=sigma)
+posterior_tau2 <- sapply(z_values, posterior_H0, rho=rho, tau2=tau2_2, sigma=sigma)
+
+# Print results
+results <- data.frame(
+  z = z_values,
+  `post_tau_1` = posterior_tau1,
+  `post_tau_2` = posterior_tau2
+)
+
+print(results)
+```
+
+
+This R script computes the posterior probability of $\mu = 0$ for different values of the standardized values $z = x/\sigma$ under two different prior choices. The results illustrate the **Jeffreys-Lindley paradox**, where the posterior probability of $H_0$ remains high particularly when the prior variance is large, e.g. when $\tau^2 = 10\sigma^2$.
+
+This example is from Marin, Jean-Michel, and Christian P. Robert,  *Bayesian core: a practical approach to computational Bayesian statistics*, Springer, 2007, p. 31-32. 
