@@ -1,0 +1,943 @@
+---
+title: "Bayesian Inference with Conjugate Models"
+output:
+  html_document:
+    df_print: paged
+    mathjax: "default"
+---
+
+**TA**: Andrea Viselli ([andrea.viselli\@polimi.it](mailto:andrea.viselli@polimi.it))
+
+## 1. A "quick" review 
+
+Consider a sample of **independent and identically distributed** (i.i.d.) observations $x_1, x_2, \ldots, x_n$, which are realizations of a random variable $X$ that may be either continuous or discrete. The probabilistic behavior of $X$ is characterized by a probability density function (p.d.f.) or probability mass function (p.m.f.) $f(x \mid \boldsymbol{\theta})$, where $\boldsymbol{\theta} \in \Theta$ represents the parameter vector of interest.
+
+The fundamental objective in statistical inference is to draw conclusions about the parameter $\boldsymbol{\theta}$ based on the observed data. Two contrasting philosophical frameworks exist for this purpose:
+
+1. In the **frequentist paradigm**, the parameter $\boldsymbol{\theta}$ is treated as a fixed, unknown constant. Inference proceeds through the construction of estimators, which are functions of the data and thus random variables. The properties of these estimators (such as bias, variance, and consistency) are evaluated with respect to repeated sampling from the population.
+
+2. In the **Bayesian paradigm**, the parameter $\boldsymbol{\theta}$ is itself modeled as a random variable, reflecting the statistician's uncertainty about its true value. This approach represents a fundamentally different philosophical perspective on the nature of probability and uncertainty.
+
+At the core of Bayesian statistics lies **Bayes' theorem**, which follows directly from the definition of conditional probability. For any two events $A$ and $B$ with $P(B) > 0$:
+
+$$
+P(A \mid B) = \frac{P(A \cap B)}{P(B)} = \frac{P(B \mid A)P(A)}{P(B)}
+$$
+
+where the denominator $P(B)$ can be expanded using the **law of total probability** as:
+
+$$
+P(B) = P(B \mid A)P(A) + P(B \mid A^c)P(A^c)
+$$
+
+when the sample space is partitioned into $A$ and its complement $A^c$. More generally, if $\{A_1, A_2, \ldots, A_k\}$ forms a partition of the sample space, then:
+
+$$
+P(B) = \sum_{i=1}^k P(B \mid A_i)P(A_i)
+$$
+
+### Bayesian estimation
+
+A Bayesian model requires the specification of a **likelihood function** $f(\mathbf{x} \mid \boldsymbol{\theta})$ for the observed data $\mathbf{x} = (x_1, \ldots, x_n)$ and a **prior distribution** $\pi(\boldsymbol{\theta})$ over the parameter space $\Theta$, where $\boldsymbol{\theta}$ represents the vector of parameters that govern the probabilistic model for the data.
+
+The central object of Bayesian inference is the **posterior distribution** of $\boldsymbol{\theta}$ given the observed data $\mathbf{x}$, which is derived using Bayes' theorem:
+
+$$
+\pi(\boldsymbol{\theta} \mid \mathbf{x}) = \frac{f(\mathbf{x} \mid \boldsymbol{\theta}) \, \pi(\boldsymbol{\theta})}{m(\mathbf{x})} \propto f(\mathbf{x} \mid \boldsymbol{\theta}) \, \pi(\boldsymbol{\theta})
+$$
+
+where $m(\mathbf{x}) = \int_{\Theta} f(\mathbf{x} \mid \boldsymbol{\theta}) \, \pi(\boldsymbol{\theta}) \, d\boldsymbol{\theta}$ is the **marginal likelihood** or **evidence**. We refer to this process as **Bayesian learning** because the posterior distribution quantifies how our beliefs about $\boldsymbol{\theta}$, initially encoded in the prior distribution, are updated in light of the observed data.
+
+**Remark**. The marginal likelihood $m(\mathbf{x})$ in the denominator of Bayes' theorem is often omitted in practice for several important reasons:
+
+1. It serves as a normalizing constant that ensures the posterior distribution integrates to 1, but does not affect the shape of the distribution.
+
+2. For many inference tasks, such as sampling via Markov Chain Monte Carlo (MCMC) methods, only the *unnormalized* posterior is needed.
+
+3. Computing $m(\mathbf{x})$ often requires high-dimensional integration that may be analytically intractable or computationally expensive, especially for complex models with many parameters.
+
+4. When comparing models using Bayes factors or computing posterior predictive distributions, the marginal likelihood becomes important and must be explicitly considered.
+
+
+### Predictive distribution
+
+The **posterior predictive distribution** of a new observation $x_{\text{n+1}}$ given the observed data $\mathbf{x} = (x_1, \ldots, x_n)$ is defined as the conditional distribution of $x_{\text{n+1}}$ given $\mathbf{x}$.
+
+To derive this distribution, we first consider the **conditional predictive distribution** $f(x_{\text{n+1}} \mid \boldsymbol{\theta}, \mathbf{x})$, which represents the distribution of $x_{\text{n+1}}$ given both the observed data $\mathbf{x}$ and the parameter vector $\boldsymbol{\theta}$. Under the assumption that observations are **conditionally independent and identically distributed** given $\boldsymbol{\theta}$, we have $f(x_{\text{n+1}} \mid \boldsymbol{\theta}, \mathbf{x}) = f(x_{\text{n+1}} \mid \boldsymbol{\theta})$.
+
+The posterior predictive distribution is then obtained by integrating over the parameter space $\Theta$ with respect to the posterior distribution:
+
+$$
+  f(x_{\text{n+1}} \mid \mathbf{x}) = 
+  \int_{\Theta} f(x_{\text{n+1}} \mid \boldsymbol{\theta}, \mathbf{x}) \, \pi(\boldsymbol{\theta} \mid \mathbf{x}) \, \mathrm{d}\boldsymbol{\theta}
+  = \int_{\Theta} f(x_{\text{n+1}} \mid \boldsymbol{\theta}) \, \pi(\boldsymbol{\theta} \mid \mathbf{x}) \, \mathrm{d}\boldsymbol{\theta}
+$$
+
+This integration effectively averages the conditional predictive distribution over all possible parameter values, weighted by their posterior probabilities. For some combinations of likelihood and prior (particularly conjugate pairs), this integral can be computed analytically, yielding a closed-form expression for the predictive distribution.
+
+When analytical solutions are not available, the posterior predictive distribution can be approximated via **Monte Carlo integration** using samples from the posterior distribution. If we have $M$ samples $\boldsymbol{\theta}^{(1)}, \ldots, \boldsymbol{\theta}^{(M)}$ drawn from $\pi(\boldsymbol{\theta} \mid \mathbf{x})$, the predictive distribution can be estimated as:
+
+$$
+f(x_{\text{n+1}} \mid \mathbf{x}) \approx \frac{1}{M} \sum_{j=1}^{M} f(x_{\text{n+1}} \mid \boldsymbol{\theta}^{(j)})
+$$
+
+### Conjugate Models
+
+A parametric family of probability distributions $\mathscr{F}=\{\pi(\theta∣\eta):\eta\in H\}$ on the parameter space $\Theta$ is *conjugate* with respect to a likelihood function $f(x|\theta)$ if, for any prior distribution $\pi(\theta|\eta) \in \mathscr{F}$ with hyperparameter $\eta$, and for any possible data $\mathbf{x}$, the posterior distribution $\pi(\theta|\mathbf{x},\eta)$ also belongs to family $\mathscr{F}$.
+
+**Remark**. Conjugacy requires the family to be closed under the Bayesian update for all possible observed data values $\mathbf{x}$, not just for all possible prior distributions in the family.
+
+For example, with a Beta prior for a binomial likelihood, if the prior is $\mathscr{B}\text{eta}(\alpha, \beta)$ and we observe $s$ successes in $n$ trials, the posterior is $\mathscr{B}\text{eta}(\alpha + s, \beta + n - s)$. The hyperparameters update according to a simple rule, and the posterior remains in the Beta family.
+
+## 2. Normal - Normal Model
+
+We start with the a sample of i.i.d. observations $x_1,\dots,x_n$ from a $\mathscr{N}(\mu,\sigma^2)$ given $\mu$, assuming a prior distribution $\mu\sim\mathscr{N}(\mu_0,\tau^2)$. The posterior distribution is the normal distribution $\mathscr{N}\left(\,\mu_n,\sigma_n^2\,\right)$ where
+
+$$
+\begin{aligned}
+\mu_n & = \frac{\sigma^2}{\sigma^2+n \tau^2} \, \mu_0 +  \frac{n \tau^2}{\sigma^2+n \tau^2} \, \bar{x} & \\
+\sigma_n^2 & = \frac{\sigma^2\tau^2}{\sigma^2+n \tau^2}.
+\end{aligned}
+$$
+
+Hence, the posterior mean $\mu \mid \mathbf{x} = \left(\, x_1,\dots,x_n \,\right)$ is $E^{\pi}\left[\,\mu \mid x_1,\dots,x_n \, \right]= \mu_n$.
+
+As an example, consider a sample of i.i.d realizations from a $\mathscr{N}(\mu,\sigma^2)$, where:
+
+-   Prior for $\mu$ is $\mathscr{N}(\mu_0,\sigma^2_0)$ where $\mu_0=2$ and $\sigma_0^2=8$.
+-   Known variance, sample size, and sample mean: $\sigma^2=4$, $n=10$ and $\bar{x}=0.8$;
+
+```{r}
+# Hyperparameters
+mu.0 = 2
+sig2.0 = 8
+
+#  Known variance, sample size, and sample mean
+sig2 = 4
+n = 10
+m.samp = 0.8
+```
+
+In practice, we are assuming that the data have a true mean equal to $0.8$. In other words, by simulating the distribution we are able to control whether the inference procedure is correct or not.
+
+```{r}
+# Prior density
+curve(dnorm(x,mean=mu.0,sd=sqrt(sig2.0)),-6, 10, lty=1, col='red',
+      ylab="Density", xlab=expression(mu),lwd=2, ylim=c(0,.65), n=1000)
+
+# Posterior params
+mu.post = (mu.0*sig2+n*m.samp*sig2.0)/(sig2+n*sig2.0)
+var.post = sig2*sig2.0/(sig2+n*sig2.0)
+
+# Posterior density
+curve(dnorm(x,mean=mu.post,sd=sqrt(var.post)),-6,10,lty=1, col='blue',
+      lwd=2, n=1000, add=T)
+
+# Add legend
+legend("topright", c("Prior","Posterior"),
+       lty = 1, lwd=2, col=c("red", "blue"))
+
+```
+
+Now, another example using data with different parameters:
+
+-   Prior for $\mu$: $\mu_0=10$ and $\sigma_0^2=0.05$.
+-   Known variance, sample size, and sample mean: $\sigma^2=1$, $n=40$ and $\bar{x}=3$;
+
+```{r}
+# Hyperparameters
+mu.0 = 10
+sig2.0 = 0.05
+
+#  Known variance, sample size, and sample mean
+sig2 = 1
+n = 40
+m.samp = 3
+```
+
+```{r}
+# Prior density
+curve(dnorm(x,mean=mu.0,sd=sqrt(sig2.0)),0, 15, lty=1, col='red',
+      ylab="Density", xlab=expression(mu),lwd=2, ylim=c(0,3.25), n=1000)
+
+# Posterior params
+mu.post = (mu.0*sig2+n*m.samp*sig2.0)/(sig2+n*sig2.0)
+var.post = sig2*sig2.0/(sig2+n*sig2.0)
+
+# Posterior density
+curve(dnorm(x,mean=mu.post,sd=sqrt(var.post)),0,15,lty=1, col='blue',
+      lwd=2, n=1000, add=T)
+
+# Add legend
+legend("topright", c("Prior","Posterior"),
+       lty = 1, lwd=2, col=c("red", "blue"))
+```
+
+As the sample size $n$ increases, the likelihood function $f(\mathbf{x} \mid \mu)$ contributes more substantially to the posterior distribution relative to the prior distribution $\pi(\mu)$. This phenomenon explains the convergence between **Bayesian** and **frequentist** inference procedures in large samples.
+
+For the normal model with known variance $\sigma^2$, where $X_i \mid \mu \sim \mathscr{N}(\mu, \sigma^2)$ and prior $\mu \sim \mathscr{N}(\mu_0, \tau^2)$, the posterior mean can be rewritten as a weighted average:
+
+$$
+\begin{aligned}
+\mu_n = E[\mu \mid \mathbf{x}] =& \frac{\sigma^2}{\sigma^2+n \tau^2} \, \mu_0 +  \frac{n \tau^2}{\sigma^2+n \tau^2} \, \bar{x} \\
+=& w \cdot \bar{x} + (1-w) \cdot \mu_0
+\end{aligned}
+$$
+
+where $w = \frac{n\tau^2}{n\tau^2 + \sigma^2}$ represents the weight assigned to the maximum likelihood estimate $\bar{x}$.
+
+This formulation demonstrates that:
+
+1. As $n \to \infty$, $w \to 1$, causing the posterior mean to converge to the sample mean $\bar{x}$ (the maximum likelihood estimator).
+
+2. The influence of the prior remains non-negligible in two key scenarios:
+   - When the sample variance $\sigma^2$ is large relative to $n$ (high data uncertainty);
+   - When the prior variance $\tau^2$ is small (strong prior certainty).
+
+3. The posterior precision (inverse variance) equals the sum of the prior precision ($1/\tau^2$) and the data precision ($n/\sigma^2$), illustrating how information combines in Bayesian inference.
+
+
+```{r}
+# Maximum likelihood estimate
+mle = m.samp
+
+# Summary dataframe
+resume=data.frame(law=c("prior","posterior"),
+                   mean=c(mu.0,mu.post),
+                   variance=c(sig2.0,var.post),
+                   smv=c(mle,mle))
+print(resume)
+```
+
+The code below includes a function to compute inference for the Normal--Normal model.
+
+```{r}
+norm.norm = function(n, m.samp, mu.0, sig2.0, sig2) {
+  # Frequentist
+  mle = m.samp
+  
+  # data sum
+  sum.sample = n*m.samp
+  
+  # Posterior params
+  mu.post = (mu.0*sig2+n*m.samp*sig2.0)/(sig2+n*sig2.0)
+  var.post = sig2*sig2.0/(sig2+n*sig2.0)
+  
+  # Summary dataset
+  summ=data.frame(law=c("prior","posterior"),
+                   mean=c(mu.0,mu.post),
+                   variance=c(sig2.0,var.post),
+                   smv=c(mle,mle))
+  
+  # Prior
+  curve(dnorm(x,mean=mu.0,sd=sqrt(sig2.0)),-6,20,n=1000,lty=1,
+        ylab="Density", xlab=expression(mu),lwd=2, ylim=c(0,.65), col="red")
+  # Posterior
+  curve(dnorm(x,mean=mu.post,sd=sqrt(var.post)),-6,20,n=1000,lty=1,
+        lwd=2,col="blue",add=T)
+  legend("topright", c("Prior","Posterior"),
+         lty=1,lwd=2, col=c('red','blue'))
+  print(summ)
+}
+
+# Example:
+norm.norm(10, 5, 3, 20, 30)
+```
+
+
+### Exercise 1
+
+
+- ☕️ (Optional) Using the definition of posterior predictive distribution, prove analytically that, for the Normal -- Normal model, the predictive distribution of a new data point $x_{n+1}$ is
+$$
+x_{n+1} \sim \mathscr{N}\left(\mu_n,\sigma^2 + \sigma^2_n\right).
+$$
+- Consider a sample of $100$ i.i.d. observations from a normal distribution with known variance, equal to $1$. Write the R code to plot the posterior predictive distribution, assuming for $\mu$ a $\mathscr{N}(0,10)$ prior.
+
+```{r}
+# Generate data
+set.seed(123)
+n = 100; 
+mu_true = 2; 
+sig2 = 1
+data = rnorm(n, mu_true, sqrt(sig2))
+```
+
+```{r}
+# Prior hyperparameters
+# ...
+
+# Predictive density function
+#pred_pdf = function(x) {dnorm(x, ??, ??)}
+
+# Plot predictive density against data histogram
+#hist(data, probability = T, main="", xlab="Data", ylim = c(0,1))
+#curve(pred_pdf(x), n=1000, lwd=2, col='blue', add = T)
+#legend("topright",c("Predictive"), lwd=2,col=c("blue"))
+```
+
+## 3. Beta -- Binomial Model
+
+Denote as $x_1,\dots,x_n$ a sample of i.i.d. observations from a Bernoulli distribution with unknown parameter $p$. The binomial distribution is defined as the distribution of $x = \sum_{i=1}^{n}x_i$, i.e. the number of successes out of $n$ trials. 
+
+The beta distribution is a conjugate distribution of the binomial distribution. We consider the beta -- Binomial model to make inference on the probability of success $p$:
+
+$$
+\begin{aligned}
+  x \mid p &\sim \text{Bin}(n, p), \\
+  p &\sim \mathscr{B}e(\alpha, \beta),
+\end{aligned}
+$$
+
+where $x = \sum_{i=1}^{n}x_i$. Thus, the likelihood and prior distribution read
+
+$$
+\begin{aligned}
+  f(\,x \mid p\,) &= \binom{n}{x}p^{x}\left(1-p\right)^{n-x}, & x &\in \{0,1,\dots,n\}, \\[5pt]
+  \pi(p) &= \frac{p^{\alpha - 1}\left(1-p\right)^{\beta - 1}}{B(\alpha,\beta)}, & p &\in [0,1],
+\end{aligned}
+$$
+
+where $B(\alpha,\beta) = \Gamma(\alpha)\Gamma(\beta)/\Gamma(\alpha+\beta)$. The posterior
+distribution of $p$ given the data is
+
+$$
+  \pi(p \mid x) = \frac{f(x \mid p)\pi(p)}{m(x)}\propto p^{\alpha + x -1}\left(1-p\right)^{\beta + n - x - 1},
+$$
+
+which corresponds to the kernel -- i.e. to the part of the distribution that depends only on the parameter of interest, $p$ -- of a beta distribution. It follows that
+
+$$
+p \mid x \sim \mathscr{B}e\left(\alpha + x, \beta + n - x\right).
+$$
+
+### *Example: Tax Evasion*
+
+Let $X$ be a i.i.d. $\text{Bern}\sim(p)$. Suppose our sample is $\mathbf{x} = \left(0,0,1\right)$, so $n=3$ is the sample size. Denoting with $s$ the number of successes, then $s=1$ in the simple case of a Bernoulli r.v.
+
+Let us assume as a prior for $p$ the $\mathscr{B}eta\left(1,1\right)$. From the conjugacy relation between the beta and binomial distributions, the posterior distribution is $p \mid \mathbf{x} \sim \mathscr{B}eta\left(2,3\right)$.
+
+```{r}
+# Sample size and success number
+n = 3
+s = 1
+
+# Prior hyperparameters
+a = 1
+b = 1
+```
+
+As usual, it is interesting to plot the prior against the posterior, changing the hyperparameters to see how the updating process takes place.
+
+```{r}
+# Prior
+curve(dbeta(x,a,b), 0, 1, lty=1, lwd=2, col="red",
+      ylim=c(0,2), main = "Prior vs. Posterior", ylab = "Density")
+
+a.post = a + s
+b.post = b + n - s
+
+# Posterior
+curve(dbeta(x ,a.post,b.post), add=T, lty=1, lwd=2, col="blue")
+
+# Add legend
+labels = c(paste0('Prior ','Beta(',a,',',b,')'),
+           paste0('Posterior ','Beta(',a.post,',',b.post,')'))
+legend("topright", legend=labels, col=c("red", "blue"), lty = 1)
+```
+
+First of all, notice that the prior distribution $\mathscr{B}e\left(1,1\right)$ coincides with the uniform prior on $\left(0,1\right)$ under this choice of $\alpha$ and $\beta$. The posterior reduces the probability of the events on the edge of the support, while the prior gives the same weight to all the events, including 0 and 1 that belong to the support of $x$. 
+
+We can compute the mean, mode, and variance of the prior and posterior distributions, see e.g. [here](https://en.wikipedia.org/wiki/Beta_distribution).
+
+```{r}
+# Useful functions
+mean.beta = function(alpha, beta) {alpha / (alpha + beta)}
+variance.beta = function(alpha, beta) {
+  (alpha*beta)/((alpha+beta)^2*(alpha+beta+1))
+}
+mode.beta = function(alpha, beta) {
+  ifelse(alpha>1 & beta>1, (alpha-1)/(alpha + beta - 2), NA)
+}
+
+# Prior statistics
+mean.prior = mean.beta(a,b)
+var.prior = variance.beta(a,b)
+mode.prior = mode.beta(a,b)
+
+# Posterior statistics
+mean.posterior = mean.beta(a.post, b.post)
+var.post = variance.beta(a.post,b.post)
+mode.post = mode.beta(a.post,b.post)
+
+# Maximum likelihood estimator
+mle = s/n
+
+# Summary dataframe
+sum_df = data.frame(law=c("Prior", "Posterior"), 
+                     mean=c(mean.prior, mean.posterior), 
+                     variance=c(var.prior, var.post),
+                     mode=c(mode.prior, mode.post), 
+                     mle=c(mle, mle))
+print(sum_df)
+```
+
+A few comments:
+
+- Since the prior $\mathscr{B}e\left(1,1\right)$ is uniform on its support, it does not have a mode.
+- The posterior mean has to take value between `mle` and the prior mean. Conversely, the posterior mean is closer to the prior mean or to `mle` depending on the sample size and elicitation of the prior, i.e. on choice of the hyperparameters.
+
+```{r}
+beta.binomial=function(n, s, a, b) {
+  
+  # frequentist estimator
+  mle=s/n
+  
+  # posterior params
+  a.post=a+s
+  b.post=b+n-s
+  
+  # useful functions
+  mean.beta = function(alpha,beta) { alpha/(alpha+beta) }
+  var.beta = function(alpha,beta) {
+    (alpha*beta)/((alpha+beta)^2*(alpha+beta+1))
+  }
+  mode.beta=function(alpha,beta) {
+    ifelse(alpha>1 & beta>1, (alpha-1)/(alpha+beta-2), NA) }
+  
+  # prior stats
+  mean.prior=mean.beta(a,b)
+  var.prior=var.beta(a,b)
+  mode.prior=mode.beta(a,b)
+  
+  # post stats
+  mean.posterior=mean.beta(a.post,b.post)
+  var.posterior=var.beta(a.post,b.post)
+  mode.posterior=mode.beta(a.post,b.post)
+  
+  # summary dataframe
+  summ=data.frame(law=c("prior","posterior"),
+                   mean=c(mean.prior,mean.posterior),
+                   variance=c(var.prior,var.posterior),
+                   mode=c(mode.prior,mode.posterior),
+                   mle=c(mle,mle))
+  
+  # Plots
+  curve(dbeta(x,a,b), 0, 1, lty=1, ylim=c(0,6), col="red", lwd=2,
+        main=paste("Prior"," Be(",a,",",b,")"),
+        xlab=expression(theta),ylab=expression(pi))
+  curve(dbeta(x,a.post,b.post), add=T, lty=1,lwd=2, col="blue")
+  labels = c(paste0('Prior ','Beta(',a,',',b,')'),
+             paste0('Posterior ','Beta(',a.post,',',b.post,')'))
+  legend("topright", legend=labels, col=c("red", "blue"), lty = 1)
+  print(summ)
+}
+```
+
+Now we change the inputs of the function and see how the posterior changes. For example, setting:
+
+- $p \sim \mathscr{B}e(1,1)$, i.e. a uniform prior;
+- $n=9$ trials and $s = 3$ successes;
+- $n=30$ trials and $s = 10$ successes
+
+```{r}
+par(mfrow=c(1,3))
+beta.binomial(3,1,1,1)
+beta.binomial(9,3,1,1)
+beta.binomial(30,10,1,1)
+```
+To calculate the median, and any other quantile (both for the prior and for the posterior distribution), you can use the following function.
+
+```{r}
+# Function to compute the median of a beta distribution
+med.beta = function(a, b) qbeta(0.5, a, b)
+
+# Posterior median
+med.beta(a.post, b.post)
+```
+
+### Exercise 2
+
+A non-profit organization is advocating for a law to protect the rights and dignity of disabled individuals. To support their cause, they conducted a study to understand the cultural beliefs of the Guatemalan population regarding polio, a disease that can cause disability. Specifically, they interviewed $24$ women, and $17$ of them believe that polio is a contagious disease.
+
+1. As a researcher, you are tasked with analyzing this data using a Beta-Binomial model. Your goal is to study the influence of different hyperparameters and sample sizes on the posterior distribution of the probability that a woman in this population believes polio is contagious.
+
+Consider four different priors with hyperparameters:
+
+- $(\alpha,\beta)=(1,1)$ (Uniform prior);
+- $(\alpha,\beta)=(5,5)$ (Symmetric prior favoring moderate values);
+- $(\alpha,\beta)=(3,10)$ (Prior skewed towards lower values of $p$);
+- $(\alpha,\beta)=(10,3)$ (Prior skewed towards higher values of $p$).
+
+2. Discuss how the choice of prior affects the posterior, especially with small sample sizes. Investigate how the posterior distribution changes with different sample sizes. Therefore, consider hypothetical scenarios where $n=50$ or $n=100$, keeping the proportion of successes the same (e.g. $35$ out of $50$ or $70$ out of $100$). Then, analyze how the posterior becomes more concentrated around the true value of $p$ as $n$ increases.
+
+
+```{r}
+beta.binomial(24,17,1,1)
+```
+
+## 4. Gamma -- Poisson model
+
+The Poisson distribution is a discrete probability distribution that models the number of events occurring within a fixed interval of time or space, given a constant average rate. The distribution is characterized by a single parameter, $\lambda$, which represents both the mean and variance of the distribution.
+
+The Gamma distribution, in contrast, is a continuous probability distribution defined on the positive real line. It is commonly used as a prior distribution for parameters that must be positive, such as rates or scale parameters.
+
+Let $x_1, \dots, x_n$ be independent and identically distributed (i.i.d.) random variables following a Poisson distribution with parameter $\lambda > 0$. We assume a Gamma distribution with shape parameter $\alpha > 0$ and rate parameter $\beta > 0$ as the prior distribution for $\lambda$.
+
+This specification defines the Gamma-Poisson model:
+
+$$ 
+\begin{aligned}
+x_i \mid \lambda &\overset{\text{iid}}{\sim} \mathscr{P}oi(\lambda) \quad i=1,\dots,n\\[5pt]
+\lambda &\sim \mathscr{G}a(\alpha, \beta)
+\end{aligned} 
+$$
+
+The likelihood function for the observed data given $\lambda$ is:
+
+$$ 
+\begin{aligned}
+f(x_1,\dots,x_n \mid \lambda) &= \prod_{i=1}^{n}\frac{\lambda^{x_i}}{x_i!}e^{-\lambda} \\
+&\propto e^{-n\lambda}\lambda^{\sum_{i=1}^{n}x_i}
+\end{aligned} 
+$$
+
+where $x_i \in \mathbb{N}_{0} = \{0,1,2,\ldots\}$ for all $i$.
+
+The prior density function for $\lambda$ is:
+
+$$ 
+\begin{aligned}
+\pi(\lambda) &= \frac{\beta^{\alpha}}{\Gamma(\alpha)}\lambda^{\alpha - 1}e^{-\beta\lambda}, \quad \lambda \in (0,+\infty)
+\end{aligned} 
+$$
+
+To derive the posterior distribution of $\lambda$ given the observed data $\mathbf{x} = (x_1,\dots,x_n)$, we apply the Bayes' theorem:
+
+$$ 
+\begin{aligned}
+\pi(\lambda \mid \mathbf{x}) &\propto f(\mathbf{x} \mid \lambda)\,\pi(\lambda) \\[5pt]
+&\propto \left[e^{-n\lambda} \lambda^{\sum_{i=1}^{n}x_i}\right] \left[\lambda^{\alpha - 1}e^{-\beta\lambda}\right] \\[5pt]
+&\propto \lambda^{\alpha + \sum_{i=1}^{n}x_i - 1} e^{-(\beta + n)\lambda}
+\end{aligned} 
+$$
+
+The expression above is the kernel of a Gamma distribution. Therefore, the posterior distribution is:
+
+$$ \lambda \mid (x_1,\dots,x_n) \sim \mathscr{G}a\left(\alpha + \sum_{i=1}^{n}x_i,\ \beta + n\right) $$
+
+Under a quadratic loss function $L(\lambda, \hat{\lambda}) = (\lambda - \hat{\lambda})^2$, the Bayes estimator $\hat{\lambda}_n$ of $\lambda$ is the posterior mean:
+
+$$ \hat{\lambda}_n = \mathbb{E}[\lambda \mid \mathbf{x}] = \int_0^{+\infty}\lambda\pi(\lambda\mid x_1,\ldots,x_n)d\lambda = \frac{\alpha + \sum_{i=1}^{n}x_i}{\beta + n} $$
+
+This estimator represents a weighted average between the prior mean $\frac{\alpha}{\beta}$ and the maximum likelihood estimate $\frac{\sum_{i=1}^{n}x_i}{n}$, with weights determined by the relative contributions of the prior parameters and the sample size.
+
+### *Example: Daily Insurance Policy Subscriptions*
+
+Let's examine a practical application of the Gamma-Poisson model. Suppose we're analyzing the number of insurance policies subscribed daily over a period of $10$ days. In this scenario:
+
+- Let $X$ represent the daily count of subscribed policies, which naturally follows a Poisson distribution.
+- We'll use a Gamma prior: $\lambda\sim\mathscr{G}a(4,1)$, reflecting our initial belief about the subscription rate.
+- Our observed data consists of $n = 10$ days with a total of $30$ policies subscribed.
+- This gives us a sample mean of $\bar{X} = 30/10 = 3$ policies per day
+
+The R code below visualizes both our prior beliefs and how they update after observing the data:
+
+```{r}
+# Hyperparameters 
+a = 4
+b = 1
+
+# Sample size and sample mean
+n = 10
+m.sample = 30/10
+sum.sample = n*m.sample
+
+# Prior density
+curve(dgamma(x,shape=a,rate=b),0,12,n=1000,lty=1,lwd=2,col='red',
+      ylab="Density", xlab=expression(lambda), ylim=c(0,0.8))
+
+# Posterior density
+a.post = a + sum.sample
+b.post = b + n
+
+curve(dgamma(x,shape=a.post,rate=b.post),n=1000,lty=1,lwd=2,col='blue',add=T)
+
+# Add legend
+legend("topright",c("Prior","Posterior"),
+       lty=1,lwd=2,col=c('red','blue'))
+
+```
+
+Because we computed the posterior distribution, we can easily derive quantities of interest, e.g. the mean, variance, et cetera.
+
+```{r}
+# Moments
+mean.gamma = function(alpha,beta) {alpha/beta}
+var.gamma = function(alpha,beta) {alpha/beta^2}
+mode.gamma = function(alpha, beta) {(alpha-1)/beta}
+
+# Prior
+mean.prior = mean.gamma(a,b)
+var.prior = var.gamma(a,b)
+mode.prior = mode.gamma(a,b)
+
+# Posterior
+mean.posterior = mean.gamma(a+sum.sample,b+n)
+var.posterior = var.gamma(a+sum.sample,b+n)
+mode.posterior = mode.gamma(a+sum.sample, b+n)
+
+# Maximum likelihood estimate
+mle = m.sample
+
+# Summary dataframe
+resume=data.frame(law=c("prior","posterior"),
+                   mode=c(mode.prior, mode.posterior),
+                   mean=c(mean.prior,mean.posterior),
+                   variance=c(var.prior,var.posterior),
+                   mle=c(mle,mle))
+print(resume)
+```
+
+The posterior mean is close to maximum likelihood estimator (MLE). As $n$ gets larger, we expect the tue values to converge.
+
+
+### Exercise 3 (Home)
+
+Suppose you are analyzing patient arrivals at a hospital emergency room. Historical data suggests that patient arrivals follow a Poisson distribution, but you want to account for uncertainty in the arrival rate.
+
+Part 1: Simulation and Prior Specification
+
+- (1a) Simulate a dataset of daily patient arrivals for $30$ days using a Poisson distribution with a true parameter $\lambda = 15$ patients per day.
+- (1b) Define a Gamma prior for λ with parameters $\alpha = 10$ and $\beta = 1$. This prior reflects your belief that the arrival rate is around $10$ patients per day, but with substantial uncertainty.
+- (1c) Visualize both the true Poisson distribution and your prior distribution for $\lambda$.
+
+Part 2: Posterior Analysis
+
+- (2a) Calculate the posterior distribution parameters for $\lambda$ given your simulated data.
+- (2b) Compute the Bayes estimator (posterior mean) for $\lambda$.
+- (2c) Generate $5000$ samples from the posterior distribution and create a histogram.
+
+Part 3: Sequential Updating
+
+- (3a) Create a plot that shows how the posterior distribution evolves as you observe more data, day by day. Show the posterior after $5$, $10$, $20$, and all $30$ days of data.
+- (3b) Plot how the Bayes estimator changes as you incorporate more data.
+
+Part 4: Prior Sensitivity Analysis
+
+Repeat the analysis with two alternative priors:
+
+- (4a) An informative prior: $\mathscr{G}a(30, 2)$ (suggesting strong belief in λ ≈ 15)
+- (4b) A diffuse prior: $\mathscr{G}a(0.5, 0.05)$ (representing minimal prior knowledge)
+- (4c) Compare the resulting posterior distributions and Bayes estimators from these different priors.
+
+```{r}
+
+# Write your code here.
+
+```
+
+
+## 5. Exponential -- Gamma Model
+
+Let $x_1, \dots, x_n$ be an independent and identically distributed (i.i.d.) sample from an Exponential distribution with parameter $\lambda > 0$. We adopt a Gamma distribution with parameters $\alpha > 0$ and $\beta > 0$ as the prior distribution for $\lambda$. This structure defines the Exponential-Gamma model.
+
+We can express the model as:
+
+$$
+\begin{aligned}
+  x_i | \lambda &\overset{\text{iid}}{\sim} \mathscr{E}xp(\lambda), \qquad i=1,\dots,n, \\[5pt]
+  \lambda &\sim \mathscr{G}a(\alpha, \beta).
+\end{aligned}
+$$
+
+The likelihood function for the observed data given $\lambda$ is:
+
+$$
+\begin{aligned}
+  f(x_1,\dots,x_n \mid \lambda) &= \prod_{i=1}^{n}\lambda\mathrm{e}^{-\lambda x_i} \\
+  &\propto \lambda^{n}\mathrm{e}^{-\lambda\sum_{i=1}^{n}x_i} & x_i &\in (0,+\infty) \quad \forall i
+\end{aligned}
+$$
+
+The likelihood function for the observed data given $\lambda$ is:
+
+$$
+\pi(\lambda) = \frac{\beta^{\alpha}}{\Gamma(\alpha)}\lambda^{\alpha - 1}\mathrm{e}^{-\beta\lambda}, \qquad\lambda \in (0,+\infty).
+$$
+
+To derive the posterior distribution of $\lambda$ given the observed data $\mathbf{x} = (x_1,\dots,x_n)$, we apply Bayes' theorem:
+
+$$
+\begin{aligned}
+  \pi(\lambda \mid \mathbf{x}) &\propto f(\,\mathbf{x} \mid \lambda\,) \, \pi(\lambda) \\[5pt]
+  &\propto \left[\lambda^{n}\mathrm{e}^{-\lambda\sum_{i=1}^{n}x_i}\right] \left[\lambda^{\alpha - 1}\mathrm{e}^{-\beta\lambda}\right] \\[5pt]
+  &\propto \lambda^{\alpha + n - 1}\,\mathrm{e}^{-\left(\beta + \sum_{i=1}^{n}x_i\right)\lambda}.
+\end{aligned}
+$$
+
+We recognize this expression as the kernel of a Gamma distribution. Therefore, the posterior distribution of $\lambda$ is:
+
+$$
+\lambda \mid \left(x_1,\dots,x_n\right) \sim \mathscr{G}a\left(\alpha + n, \beta + \textstyle\sum_{i=1}^{n}x_i\right).
+$$
+
+The Exponential distribution is widely used to model **time-to-event** data, i.e. the duration until a specific event occurs. Common applications include:
+
+- Time until equipment failure
+- Length of telephone calls
+- Duration of customer service interactions
+- Lifetime of electronic components
+- Intervals between arrivals in queuing systems
+
+The updated parameters have intuitive interpretations:
+
+- The shape parameter increases by the sample size: $\alpha + n$
+- The rate parameter increases by the sum of observations: $\beta + \sum_{i=1}^{n}x_i$
+
+Consider a sample of $n=10$ observations with sample mean $\bar{x} = 3$. We assume a $\mathscr{G}a(1,1)$ distribution as the prior for $\lambda$.
+
+The posterior distribution parameters are:
+
+- Shape parameter: $\alpha + n = 1 + 10 = 11$
+- Rate parameter: $\beta + n\bar{x} = 1 + 10 \cdot 3 = 1 + 30 = 31$
+
+Therefore, the posterior distribution is $\mathscr{G}a(11, 31)$, with posterior mean $\frac{11}{31} \approx 0.355$. This represents our updated belief about the rate parameter $\lambda$ after observing the data.
+
+```{r}
+# Hyperparameters
+a = 1
+b = 10
+
+# Sample quantities
+n = 10
+m.samp = 3
+tot.samp = n*m.samp
+
+# Prior
+curve(dgamma(x,shape=a,rate=b),0,2,n=1000,lty=1,lwd=2,col='red',
+      ylab="Density", xlab=expression(lambda), ylim=c(0,4))
+# Posterior
+curve(dgamma(x,shape=n+a,rate=tot.samp+b),0,5,n=1000,lty=1,lwd=2,col='blue',add=T)
+# Legend
+legend("topright",c("Prior","Posterior"),
+       lty=1,lwd=2,col=c('red','blue'))
+
+```
+
+**Remark**: Key differences between the Poisson--Gamma and Exponential--Gamma.
+
+Poisson Model:
+
+- Models counts of discrete events within a fixed interval
+- Answers questions like: "How many customers will arrive in the next hour?"
+
+Exponential Model:
+
+- Models continuous waiting times or durations until an event occurs
+- Answers questions like: "How long until the next customer arrives?"
+
+As an example, imagine monitoring calls to a customer service center:
+
+- Poisson model: Assume that the center receives an average of $5$ calls per hour ($\lambda = 5$). The probability of receiving e.g. $7$ calls in the next hour would be calculated using the Poisson PMF.
+- Exponential model: The average time between calls is $1/5$ hour ($12$ minutes). The probability that you'll wait more than $15$ minutes for the next call would be calculated using the Exponential CDF.
+
+
+## 6. Normal -- Normal-Inverse Gamma Model
+
+Consider a dataset $x_1,\dots,x_n$ consisting of i.i.d. observations from a normal distribution, where both the mean  and $\mu$ and variance $\sigma^2$ are unknown. We adopt a conjugate prior, the Normal-Inverse Gamma distribution:
+
+$$
+\begin{aligned}
+  \left(x_1,\dots,x_n\right) | \mu,\sigma^2 &\overset{\text{iid}}{\sim} \mathscr{N}\left( \mu,\sigma^2 \right), \\[5pt] 
+  \mu \mid \sigma^2 &\sim \mathscr{N}(\mu_0, \sigma^2 / k_0), \\[5pt]
+  \sigma^2 &\sim \mathscr{IG}(\alpha_0, \beta_0),
+\end{aligned}
+$$
+
+where the notation $\sigma^2 \sim \mathscr{IG}(\alpha_0, \beta_0)$ is sometimes written equivalently as $\sigma^{-2} \sim \mathscr{G}a(\alpha_0, \beta_0)$. 
+
+The prior for $(\mu,\sigma^2)$ is specified hierarchically:
+
+$$
+  \pi(\mu,\sigma^2) = \pi(\mu|\sigma^2)\pi(\sigma^2).
+$$
+This formulation allows for greater flexibility than the simpler Normal-Normal model, making it more realistic, as the data variance is often unknown in practice.
+
+The posterior distribution of $(\mu,\sigma^2)$ remains Normal-Inverse Gamma - i.e. a proper distribution - with updated parameters:
+
+$$
+\begin{aligned}
+  \mu_n &= \frac{k_0\,\mu_0 + n\,\bar{x}}{k_0 + n}, 
+  \qquad & k_n &= k_0 + n, \\[5pt]
+  \alpha_n &= \alpha_0 + \frac{n}{2}, 
+  \qquad & \beta_n &= \beta_0 + \frac{S^2}{2} + \frac{n \, k_0 \, (\bar{x}- \mu_0)^2}{2 \, (k_0 + n)},
+\end{aligned}
+$$
+where $S^2 = \sum_{i=1}^{n}\left(x_i - \bar{x}\right)^2$.
+
+**Sampling from an Inverse Gamma Distribution**
+
+The Inverse Gamma distribution is not a default function in `R`, but there are packages that provide implementations:
+
+1. Using the `pscl` package:
+
+- `densigamma(x, alpha, beta)`: Density function of $\mathscr{IG}(\alpha,\beta)$.
+- `pigamma(q, alpha, beta)`: Distribution function of $\mathscr{IG}(\alpha,\beta)$.
+- `qigamma(p, alpha, beta)`: Quantiles of $\mathscr{IG}(\alpha,\beta)$.
+- `rigamma(n, alpha, beta)`: Random number generator for $\mathscr{IG}(\alpha,\beta)$.
+
+2. Using the `invgamma` package:
+
+Another alternative is the `invgamma` package, which provides similar functions.
+
+3. Manual Sampling from an Inverse Gamma
+
+Alternatively, we can sample from an Inverse Gamma by leveraging its relationship with the Gamma distribution:
+
+$$
+X \sim \mathscr{IG}\left(\alpha,\beta\right) \iff \frac{1}{X} \sim \mathscr{G}a\left(\alpha,\beta\right)
+$$
+
+This means we can:
+
+- Draw a sample $Y$ from $\mathscr{G}a(\alpha,\beta)$
+- Compute $X=1/Y$ to obtain an $\mathscr{IG}(\alpha,\beta)$ sample
+
+```{r}
+# Load library
+suppressMessages(library("pscl"))
+
+# Hyperparameters
+a = 1
+b = 1
+
+# Sample quantities
+Nsim = 10^3
+
+# Draws from gamma distribution
+sample.gamma = rgamma(Nsim,a,rate=b)
+sample.inv.gamma = 1/sample.gamma
+
+# Draws using pscl
+sample.from.pscl = rigamma(Nsim,a,b)
+
+# Comparison plot
+par(mfrow=c(1,2))
+hist(sample.inv.gamma, probability=TRUE,
+     main="InvGamma from Gamma", breaks=50, ylim=c(0,0.5),xlim=c(0,15))
+curve(densigamma(x,a,b),0.001,15,n=1000,add=T,col=2,lwd=2)
+
+hist(sample.from.pscl,probability=TRUE,
+     main="InvGamma from pscl", breaks=50,ylim=c(0,0.5),xlim=c(0,15))
+curve(densigamma(x,a,b),0.001,15,n=1000,add=T,col=2, lwd=2)
+
+```
+
+
+**Predictive density**
+
+In the Normal–Normal-Inverse Gamma model, the posterior predictive distribution of a new observation $x_{n+1}$ follows a Student-$t$ distribution. That is,  
+
+$$
+x_{n+1} \mid x_1,\dots,x_n \sim t_{2\alpha_n}\left(\mu_{n}, \frac{\beta_{n}(k_n + 1)}{\alpha_n k_n}\right)
+$$
+
+where:  
+
+- $(\mu_n, k_n, \alpha_n, \beta_n)$ are the posterior parameters of the Normal-Inverse Gamma model, derived from the observed data $x_1,\dots,x_n$.  
+- The notation $t_{\nu}(\mu, \sigma)$ represents a Student-$t$ distribution with:
+  - $\nu=2\alpha_n$ degrees of freedom,  
+  - Mean $\mu_n$,  
+  - Scale parameter $\sigma = \frac{\beta_n (k_n + 1)}{\alpha_n k_n}$.  
+
+This result arises from integrating out both the mean $\mu$ and variance $\sigma^2$ under the conjugate Normal-Inverse Gamma prior, leading to a Student-$t$ distribution for the predictive density of future observations. 
+
+### *Example: Visualizing the Normal--Inverse Gamma prior*
+
+```{r}
+
+# Sample size:
+n = 10^4
+
+# Hyperparameters:
+m0 = 0
+a0 = 0.1
+b0 = 0.1
+k0 = 0.1
+
+sigma0 = 1/rgamma(n,a0,rate=b0)
+mu0 = rnorm(n,m0,sqrt(sigma0/k0))
+
+# We truncate all observations that are greater
+# than a threshold (for visualization purposes):
+truncationValue = 10^9
+
+plot(sigma0[sigma0<truncationValue],mu0[sigma0<truncationValue],pch=19,col="blue",
+     main=expression("Joint prior density (truncated for large" ~ sigma^{2} ~ ")"),
+     xlab = expression(sigma^{2}), ylab = expression(mu ~ "|" ~ sigma^{2}))
+abline(h=0)
+
+```
+
+With the chosen hyperparameters $\alpha=0.1$ and $\beta=0.1$, the Inverse Gamma prior on $\sigma^2$ is very diffuse, meaning it assigns substantial probability to extremely large values. Since an Inverse Gamma distribution is heavy-tailed for small shape parameters, large $\sigma^2$ values frequently occur. This implies a weak prior on $\sigma^2$, allowing extreme variations in the prior variance of $\mu$.
+
+Notice that the mean of an Inverse Gamma distribution is only defined for shape parameter $\alpha > 1$ because of the properties of its expected value. Setting $\alpha\leq1$ in an Inverse Gamma prior leads to an improper prior, meaning that the total probability mass does not integrate to 1.
+
+A contour plot (or level curves) is another way to visualize the joint prior density. Additionally, a 3D plot could show the posterior density, where the vertical axis represents posterior probabilities over the parameter space.
+
+```{r}
+
+# Hyperparameters:
+m0=0
+a0=0.1
+b0=0.1
+k0=0.1
+
+# Values:
+sigma0 = 1:1000
+mu0 = -50:49
+z = matrix(NA,length(sigma0),length(mu0))
+
+# Matrix of outcomes:
+for (i in 1:length(sigma0)) {
+  z[i,] = sigma0[i]^(-2*a0)*exp(-sigma0[i]^(-2)*(k0*(mu0-m0)^2+2*b0)/2)
+}
+
+max_xlim = 50
+filled.contour(sigma0,mu0,z,xlim=c(0,max_xlim),ylim=c(-m0+10,m0-10),
+        main=expression("Contour plot for" ~ pi~"("~mu~","~sigma^{2}~")"),
+        xlab = expression(sigma^{2}), ylab = expression(mu ~ "|" ~ sigma^{2}))
+
+```
+
+Instead of a simple scatterplot that illustrates the dispersion of the prior mean given the prior variance, this visualization represents the prior density evaluated at `m0` and `sigma0`, providing a much clearer and more informative depiction of their relationship.
+
+
+### Exercise 5
+
+Now that we have established the theoretical foundation, it's time to apply our model to real data! Follow these steps to generate and analyze your posterior distribution:
+
+1. Generate Data: Simulate $N=1000$ observations from a Gaussian distribution.
+2. Compute Posterior Parameters: Use the Normal–Normal-Inverse Gamma (N-NIG) model to update your prior beliefs based on the observed data.
+3. Perform Inference: Since our posterior is now a joint distribution over both $\mu$ and $\sigma^2$, summarize the results by:
+- Visualizing the marginal posterior distributions for $\mu$ and $\sigma^2$
+- Computing key summary statistics (mean, variance, credible intervals).
+4. Visualize Results: Use contour plots or density plots to represent the joint posterior distribution.
+5. Compute the predictive distribution of a new data point $x_{n+1}$. (Optional) You can use the `dst` function in the `LaplacesDemon` package.
+
+```{r}
+#library("LaplacesDemon")
+
+# Prior parameters
+a.0 = 0.15
+b.0 = 0.5
+mu.0 = 2
+k.0 = 5
+
+# Data
+Nsim = 1000
+data = rnorm(Nsim,mean=2.5, sd=1.2)
+
+# Write your code here.
+```
