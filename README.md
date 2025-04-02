@@ -1,1 +1,9 @@
 # BAYESIAN-LEARNING-AND-MONTECARLO-SIMULATION
+
+Principles of Bayesian learning. Quantifying uncertainty using probabilities. Likelihood, prior and posterior distributions: Bayes’ Theorem for learning from data. Bayesian estimation and hypothesis testing. Posterior mean and variance, maximum a posteriori (MAP) estimate, posterior intervals, prediction, Bayes factor.
+Basic models. Bayesian learning for proportions (Bernoulli model- Beta prior). Inference for mean and variance in normal model (Normal Gamma prior). Inference for count data (Poisson model Gamma prior). Generalizations: conjugate priors.
+Statistical Computing. Introduction to R software for Bayesian analysis.
+Monte Carlo Methods. Why sampling methods are needed: intractable integrals and sums. Monte Carlo integration. Importance sampling. Monte Carlo Markov Chain. Practical examples and implementation in R and JAGS.
+More complex models. A selection among these subjects: mixture of normal distributions and clustering (Expectation Maximization, Gibbs sampling), Bayesian linear regression models, classification (naive Bayes). Basics of Bayesian reliability models. Practical examples using JAGS. 
+Applications to real data. Electrical load forecasting and electricity demand, Bayesian optimization for efficient uncertainty quantification in complex electrical/electronic systems.
+ 
