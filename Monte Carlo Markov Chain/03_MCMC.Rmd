@@ -1,0 +1,1109 @@
+---
+title: "Monte Carlo and MCMC methods"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+**Lecturer**: Andrea Viselli
+([andrea.viselli\@polimi.it](mailto:andrea.viselli@polimi.it))
+
+## 1. Monte Carlo methods
+
+The main idea behind Monte Carlo (MC) methods is the use of numerical approximation to compute integrals, e.g. probability density functions. In particular, the law of large numbers (LLN) and central limit theorem are the two basic results used for MC integration, which make such an approach flexible for a variety of situations in which a closed-form solution of the integral is not available.
+
+Consider an i.i.d. sample $\theta_1,\dots,\theta_n$ from a distribution $\pi(\theta)$ with $E_{\pi}(\theta)<\infty$, i.e. finite expected value. According to the LLN, the sample average $\hat{\theta}$ converges to the expected value $E_{\pi}(\theta)$ as $n\rightarrow+\infty$. It turns out that this result also holds for any function $g(\theta)$. It follows that
+
+$$
+E_{\pi}\left[\,g(\theta)\,\right] = \int_{\Theta}g(\theta)\pi(\theta)\mathrm{d}\theta \approx \frac{1}{N}\sum_{j=1}^{N}g(\theta_{j}).
+$$
+
+In general, we are able to approximate the distribution of $\theta$ and thus to compute the cumulative distribution function and credible intervals using the CLT.
+
+The modern version of (Markov Chain) Monte Carlo methods were invented by [Stanislaw Ulam](https://en.wikipedia.org/wiki/Stanislaw_Ulam) while he was working on nuclear weapons projects at the *Los Alamos National Laboratory*. He recounts his inspiration as follows:\
+
+> *The first thoughts and attempts I made to practice [Monte Carlo methods] were
+> suggested by a question which occurred to me in 1946 as I was convalescing
+> from an illness and playing solitaires. The question was what are the chances
+> that a Canfield solitaire laid out with 52 cards will come out successfully?
+> After spending a lot of time trying to estimate them by pure combinatorial
+> calculations, I wondered whether a more practical method than "abstract
+> thinking" might not be to lay it out say one hundred times and simply observe
+> and count the number of successful plays. [...] Later, I described the idea to
+> [John von
+> Neumann](https://en.wikipedia.org/wiki/John_von_Neumann "John von Neumann"),
+> and we began to plan actual calculations.*
+
+Being secret, the work of von Neumann and Ulam required a code name. A colleague of von Neumann and Ulam, [Nicholas
+Metropolis](https://en.wikipedia.org/wiki/Nicholas_Metropolis "Nicholas Metropolis"), suggested using the name *Monte Carlo*, which refers to the Monte Carlo Casino in Monaco where Ulam's uncle would borrow money from relatives to gamble.
+
+
+### Example 1: *the sum of two dices*
+
+Suppose our interest lies in estimating $E(X_1 + X_2)$, where $X_1$, $X_2$ are i.i.d. random variables (r.v.) whose outcome is the number that has come out from the throw of a dice, that is
+
+$$
+\newcommand{\iid}{\stackrel{\small\mathrm{iid}}{\sim}}
+X_1,\,X_2 \iid \mathscr{U}\left(\{1,2,\dots,6\}\right).
+$$
+Notice that the expected value of the r.v. $X_1+X_2$ can be easily computed in closed form, so $E(X_1 + X_2) = E(X_1) + E(X_2) = 7$ because $X_1$ and $X_2$ are independent.
+
+However, when this is not feasible -- the usual situation in presence of complex models -- we can rely on numerical methods, in particular Monte Carlo (MC) methods, as follows.
+
+
+```{r}
+# Clear the workspace:
+rm(list=ls())
+
+# Set the seed for replication:
+set.seed(1)
+
+# Simulate the distributions:
+N = 10000
+X1 = sample(1:6, size=N, replace = T, prob=rep(1/6,6))
+X2 = sample(1:6, size=N, replace = T, prob=rep(1/6,6))
+X = X1 + X2
+```
+
+The variable `X` contains the sum of $N$ dice throws from $X_1$ and $X_2$. The MC estimation of $E(X_1 + X_2)$ is simply computed using the `mean()` function in `R`. We can compute the true error (as we know the theoretical mean) and the MC standard error, i.e. the standard deviation of the estimate.
+
+```{r}
+# Compute the results:
+errors = data.frame("MC Estimate" = mean(X),
+                     "True Error" = abs(mean(X)-7),
+                     "MC Error" = sqrt(var(X)/N))
+errors
+```
+
+Using the well-known result of the CLT, we are able to compute credible intervals as well. Denote with $X_N$ the sample mean computed from a large number $N$ of i.i.d. draws from $X$ and with $\sigma^2$ the variance of $X$, then
+
+$$
+  \sqrt{N}(\bar{X}_N - \mu) \xrightarrow{d} \mathscr{N}(0,\sigma^2),
+$$
+or we can write that $\bar{X}_N\approx\mathscr{N}(\mu,\frac{\sigma^2}{N})$ as $N\rightarrow\infty$. In practice, we estimate the asymptotic variance $\frac{\sigma^2}{N}$ using the sample standard deviation.
+
+
+```{r}
+# Level and variance:
+a = 0.05
+se = sqrt(var(X)/N)
+
+# Compute the (1-a)% level credible interval:
+CI = c(qnorm(a/2, mean= mean(X),sd=se), qnorm(1-a/2, mean= mean(X),sd=se))
+CI
+```
+
+What happens as the sample size $N$ *increases*? We can display it with a (very interesting!) figure.
+
+```{r}
+# Compute the "running sum":
+runSum = cumsum(X)
+
+# Plot the "running mean":
+plot(1:N, runSum/1:N, pch=19, col="steelblue", cex=0.5,
+     xlab="N° of Iterations", ylab="Runnung Mean")
+
+# Draw the true mean:
+abline(h=7, col='red', lwd=2, lty=2)
+
+# Compute the running "credible interval":
+runSumSq = cumsum(X^2)
+
+# Plot the running "credible interval":
+se = sqrt(runSumSq/0:(N-1)-runSum^2/(1:N*0:(N-1)))/sqrt(1:N)
+lines(1:N, qnorm(0.975, mean= runSum/1:N, sd=se), col='darkorange', lty=1)
+lines(1:N, qnorm(0.025, mean= runSum/1:N, sd=se), col='darkorange', lty=1)
+```
+
+### Exercise 1 
+
+Generate $n$ observations from a Student *t* distribution with 1 degree of freedom. What is your estimate of the expected value of the distribution of the sample mean? Can you explain why such an estimate does not improve as the sample size increases? (Hint: it has to do with the assumptions of the LLN).
+
+```{r}
+rm(list = ls())
+set.seed(1)
+n = 5000
+df = 1 
+xdata = rt(n,df)
+xsum = rep(NA,n)
+for(s in 1: n){
+  xsum[s]= sum(xdata[1:s]/s)
+}
+plot(xsum,type="l")
+
+```
+
+
+
+### Example 2 *(P. Hoff, 2009, Chapter 4)*
+
+Consider two samples where $\mathbf{y}_1$ is the sample of the number of children for the $n_1$ women **without** college degrees, while $\mathbf{y}_2$ is the sample of the number of children for the $n_2$ women **with** college degrees. We assume that the observations from each sample are distributed according to an i.i.d. Poisson, $\mathscr{P}ois(\cdot)$ with parameters $\theta_1$ and $\theta_2$, respectively.
+
+We assume that the priors are $p(\theta_1), p(\theta_2) \overset{\text{i.i.d.}}{\sim} \mathscr{G}a(\alpha,\beta)$, where $\mathscr{G}a(\cdot,\cdot)$ denotes a Gamma distribution, then the joint prior is a product of Gamma densities. We choose that $\alpha=2$ and $\beta=1$, so $\mathbb{E}(\theta_i)=2$, $Var(\theta_i)=2$. Because this model is conjugate for the Gamma distribution, the joint posterior reads
+
+$$
+  (\theta_1, \theta_2) \mid \mathbf{y} \sim \mathscr{G}a\left(\alpha +\sum_{i=1}^{n_1} y_{1i},\,\beta +n_1\right) \times \mathscr{G}a\left(\alpha+\sum_{i=1}^{n_2} y_{2i},\,\beta+n_2\right),
+$$
+
+which in our example is a $\mathscr{G}a(219, 212) \times \mathscr{G}a(68, 45)$. 
+
+In the following code, we focus on approximating the marginal posterior density of $\theta_2$ using the MC approach. Then we compute the posterior mean as a point estimate and the probability of an arbitrary interval under our posterior approximation. Notice that we have already generated the prior density in previous labs, so nothing changes in this respect.
+
+In particular, our analysis will only consider one of such Gamma posteriors. However, notice that you can repeat inference for the other and visualize them together to obtain the joint posterior.
+
+```{r}
+# Clear the workspace:
+rm(list=ls())
+
+# Set the seed for replication:
+set.seed(1)
+
+# Set the prior parameters:
+a = 2
+b = 1
+sy = 66
+n = 44
+
+# Simulate the posterior distribution
+# using three sample sizes:
+theta.support = seq(0,3,length=100)
+theta.sim10 = rgamma(10,a+sy,b+n)
+theta.sim100 = rgamma(100,a+sy,b+n)
+theta.sim1000 = rgamma(1000,a+sy,b+n)
+
+# Plot of the histogram and kernel density 
+# estimate for the three samples with size
+# 10, 100, and 1000:
+
+par(mfrow=c(2,3))
+xlim=c(.75,2.25)
+ylim=c(0,2.5)
+lty=1
+
+hist( theta.sim10, prob=T,xlim=xlim,ylim=ylim,xlab="",main="M=10",ylab="")
+lines(theta.support,dgamma(theta.support,a+sy,b+n),col="blue",lwd=2,lty=lty)
+
+hist( theta.sim100, prob=T,xlim=xlim,ylim=ylim,xlab="",main="M=100" ,ylab="")
+lines(theta.support,dgamma(theta.support,a+sy,b+n),col="blue",lwd=2,lty=lty)
+
+hist( theta.sim1000, prob=T,xlim=xlim,ylim=ylim,xlab="",main="M=1000" ,ylab="")
+lines(theta.support,dgamma(theta.support,a+sy,b+n),col="blue",lwd=2,lty=lty)
+
+plot(density(theta.sim10),xlim=xlim,ylim=ylim,
+     xlab=expression(theta),main="",ylab="")
+lines(theta.support,dgamma(theta.support,a+sy,b+n),col="blue",lwd=2,lty=lty)
+
+plot(density(theta.sim100),xlim=xlim,ylim=ylim,
+     xlab=expression(theta),main="",ylab="")
+lines(theta.support,dgamma(theta.support,a+sy,b+n),col="blue",lwd=2,lty=lty)
+
+plot(density(theta.sim1000),xlim=xlim,ylim=ylim,
+     xlab=expression(theta),main="",ylab="")
+lines(theta.support,dgamma(theta.support,a+sy,b+n),col="blue",lwd=2,lty=lty)
+```
+
+
+```{r}
+# True mean value:
+mu_true = (a+sy) / (b+n)
+
+# Return the MC estimate and standard 
+# error for the three samples with
+# sizes 10, 100, and 1000:
+
+output = data.frame(
+  "True" = c(mu_true, NA),
+  "M = 10" = c(mean(theta.sim10),sqrt(var(theta.sim10)/10)),
+  "M = 100" = c(mean(theta.sim100),sqrt(var(theta.sim100)/100)),
+  "M = 1000" = c(mean(theta.sim1000),sqrt(var(theta.sim1000)/1000))
+)
+
+output = round(output,4)
+row.names(output) = c("Estimate", "Standard error")
+colnames(output) = c("True","10","100","1000")
+output
+```
+
+Of course, the quality of the approximation increases as $n_2\rightarrow\infty$. For example, we can compute the probability that the absolute value of the error is larger than $c = 0.01$, in the three cases of the sample size:
+
+```{r}
+# Set the value on the support:
+c = 0.01
+
+output = data.frame(
+  "M = 10" = 2*(1-pnorm(c, sd=(sqrt(var(theta.sim10)/10)))),
+  "M = 100" = 2*(1-pnorm(c, sd=(sqrt(var(theta.sim100)/100)))),
+  "M = 1000" = 2*(1-pnorm(c, sd=(sqrt(var(theta.sim1000)/1000))))
+)
+
+output = round(output,4)
+row.names(output) = c("P(|e|>0.01)")
+colnames(output) = c("10","100","1000")
+output
+```
+
+More interestingly, the MC approach allows us to compute the probability of an interval over the support of the estimated density. For example, we may be interested in the posterior probability
+
+$$
+  P(\theta_2 \leq 1.75|\mathbf{y}) = \int_{-\infty}^{1.75} \pi(\theta_2 \mid \mathbf{y}) \mathrm{d}\theta_2 = \int   \mathbb{I}_{(\infty;1.75)}(\theta_{2})\pi(\theta_2 \mid \mathbf{y}) \mathrm{d}\theta_2 = E_{\pi}[\mathbb{I}_{(\infty;1.75)}(\theta_{2})] \approx \frac{1}{N}\sum_{j=1}^{N}\mathbb{I}_{(\infty;1.75)}(\theta_{2}^{\,j}),
+$$
+
+where $E_{\pi}(\cdot)$ is the expected value computed with respect to the posterior $\pi(\theta_2 \mid \mathbf{y})$. In practice, after we sample from the posterior (which might or might not be available in closed form), we calculate the fraction of the $\theta_{2}^{\,j}$'s that are smaller or equal than $1.75$.
+
+```{r}
+# Evaluate the c.d.f. at 1.75 with respect
+# to the posterior of theta_2:
+
+output = data.frame(
+  "True" = pgamma(1.75, a+sy, b+n),
+  "M = 10" = mean( theta.sim10 <= 1.75),
+  "M = 100" = mean( theta.sim100 <= 1.75),
+  "M = 1000" = mean( theta.sim1000 <= 1.75)
+)
+
+output = round(output,4)
+row.names(output) = c("P(theta_2<=1.75|y)")
+colnames(output) = c("True","10","100","1000")
+output
+```
+
+Furthermore we can check the convergence of the estimates of $\mathbb{E}(\theta_2)$, $\mathbb{P}(\theta_2 \leq 1.75)$ and the $97.5\%$ quantile as the sample size $M$ increases. Notice that the sequences we obtain are not monotonic.
+
+```{r}
+# Simulate the data:
+M = 10000
+theta.sim = rgamma(M,a+sy,b+n)
+
+# Compute the mean:
+cmean = cumsum(theta.sim)/(1:M)
+
+# Compute the variance:
+cvar = cumsum(theta.sim^2)/(1:M) - cmean^2
+
+# Compute P(theta < 1.75):
+ccdf = cumsum(theta.sim<1.75)/ (1:M)
+
+# Compute the 97.5% quantile:
+cq = NULL
+for(j in 1:M){
+  cq = c(cq,quantile(theta.sim[1:j],probs=0.975))
+}
+
+# Construct subsets of data with
+# an increasing number of obs:
+sseq = c(1,(1:100)*(M/100))
+cmean = cmean[sseq] 
+cq = cq[sseq] 
+ccdf = ccdf[sseq] 
+
+# Plot the MC estimates for each data subset:
+par(mfrow=c(1,3),mar=c(2.75,2.75,.5,.5),mgp=c(1.70,.70,0))
+
+plot(sseq, cmean, type="l", col="black",
+     xlab="Number of observations", ylab="Mean")
+abline(h = (a+sy)/(b+n),col="gray", lwd=2)
+
+plot(sseq, ccdf, type="l", col="black",
+     xlab="Number of observations", ylab="CDF, P(theta_2<=1.75|y)")
+abline(h = pgamma(1.75,a+sy,b+n), col="gray", lwd=2)
+
+plot(sseq, cq, type="l", col="black",
+     xlab="Number of observations", ylab="Quantile, 97.5% level")
+abline(h = qgamma(.975,a+sy,b+n), col="gray", lwd=2)
+```
+
+It is simple, in case you do not known the marginal posterior distributions, to compute more difficult probabilities such as $\mathbb{P}(\theta_1 > \theta_2 \mid \mathbf{y})$. We draw a sample from the joint posterior $\pi\left(\theta_1,\theta_2 \mid \mathbf{y}\right)$ and then we estimate the probability of interest as the fraction of times $\{(\theta_1^{\,j}$ is greater than $\{(\theta_2^{\,j}$ over all cases $M$.
+
+```{r}
+# Set the prior hyperparameters:
+a=2
+b=1
+sy1=217
+n1=211
+sy2=66
+n2=44
+
+# Sample from the respective posteriors:
+theta1.mc = rgamma(M,a+sy1, b+n1)
+theta2.mc = rgamma(M,a+sy2, b+n2)
+
+# Our probability of interest:
+mean(theta1.mc > theta2.mc)
+```
+
+We can compute the predictive distributions very easily, too, given two $i.i.d.$ samples from the posterior distributions of $\theta_i$, $i=1,2$. As seen previously, the predictive density reads
+
+$$
+f(y_{new} \mid \mathbf{y}) = \int_{\Theta} f(y_{new} \mid \theta,\mathbf{y}) \, \pi(\theta \mid \mathbf{y}) \, \mathrm{d}\theta,
+$$
+
+Since, previously, we simulated the samples for the $\theta_i$'s (which in turn depend on the observations $\mathbf{y}$), the predictive density may be approximated by random draws from a Poisson distribution with parameters $\theta_i^{(j)}$, for $i=1,2$ and $j=1,\ldots,M$.
+
+In other words, we can use the samples $\theta_i^{(j)}$ to compute a MC approximation of the posterior predictive as:
+
+$$
+f(y_{new} \mid \mathbf{y}) \approx \frac{1}{M} \sum_{j=1}^{M} f(y_{new} \mid \theta_i^{(j)}, \mathbf{y}),
+$$
+
+where $f(y_{new} \mid \theta_i^{(j)}, \mathbf{y}) \sim \mathscr{P}ois(\theta_i^{(j)})$.
+
+```{r}
+# Sample from the posterior predictive distribution:
+y1.mc = rpois(M,theta1.mc)
+y2.mc = rpois(M,theta2.mc)
+
+# Some quantities
+cat(paste("P(Y1 > Y2) =", mean(y1.mc>y2.mc), "\n"))
+cat(paste("P(Y1 = Y2) =", mean(y1.mc==y2.mc), "\n"))
+cat(paste("P(Y1 < Y2) =", mean(y1.mc<y2.mc), "\n"))
+```
+
+Finally, we plot the joint and marginal posteriors (first pair of figures) and the posterior predictive (second pair of figures). Recall that in a Poisson -- Gamma model, the posterior predictive distribution is distributed as a Negative Binomial $\mathscr{NB}(\cdot,\cdot)$:
+
+$$
+\mathbf{y}_{new}|\mathbf{y} \sim \mathscr{NB}\Bigl( \alpha_n,\frac{\beta_n}{\beta_n+1}\Bigr).
+$$
+```{r}
+# Plot the joint posterior (scatterplot):
+par(mfrow=c(1,2))
+plot(theta1.mc,theta2.mc, pch=19, col='steelblue', main="Joint Posterior")
+
+# Plot the marginal posteriors:
+plot(density(theta1.mc),xlim=c(0.5,3.5),lwd=2, main='Marginal Posterior')
+lines(density(theta2.mc),main="",xlim=c(0.5,3.5),lwd=2, col=2)
+legend("topright", lwd=c(2,2), col=c(1,2),
+       legend=c(expression(paste(theta,"1",sep="")), 
+                expression(paste(theta,"2",sep=""))))
+
+# Plot the true and simulated 
+# predictive distributions:
+ds = seq(0,8)
+
+par(mfrow=c(1,2), lwd=2)
+barplot(prop.table(table(y1.mc)), col='steelblue', border=NA,
+        xlab='Y1', ylab='p(Y1 | data)')
+barplot(dnbinom(ds,a+sy1,(b+n1)/(1+b+n1)), col=NA, border = 'darkorange', add=TRUE)
+legend("topright", legend = c("Simulated", "Theoretical"),
+       fill=c('steelblue',NA), border=c(NA, 'darkorange'))
+
+barplot(prop.table(table(y2.mc)), col='steelblue', border=NA,
+        xlab='Y2', ylab='p(Y2 | data)')
+barplot(dnbinom(ds,a+sy2,(b+n2)/(1+b+n2)), col=NA, border = 'darkorange', add=TRUE)
+legend("topright", legend = c("Simulated", "Theoretical"),
+       fill=c('steelblue',NA), border=c(NA, 'darkorange'), box.lwd = 1)
+```
+
+
+### Example 3: *mood of a kid (Intro to Markov Chain Monte Carlo)*
+
+A kid's mood on any given day is either (C) cheerful , (S) so-so , or (G) glum.
+
+-   If she is **cheerful** today, then she will be C, S, or G tomorrow with probability equal to $0.5$, $0.4$, $0.1$, respectively;
+-   If she is feeling **so-so** today, then she will be C, S, or G tomorrow with probability equal to $0.3$, $0.4$, $0.3$, respectively;
+-   If she is **glum** today, then she will be C, S, or G tomorrow with probability equal to $0.2$, $0.3$, $0.5$, respectively.
+
+We aim to find the distribution of the mood of such a kid using Monte Carlo methods to find such a distribution. We simulate the mood of the kid over many days, using the information described above. As shown above, the distribution of the kid's mood is computed as the proportion of days in which she was C, S or G.
+
+Firstly, we consider the transition matrix
+
+$$
+p_{ij} = P(X_{t+1} = j \mid X_t = i)
+$$
+
+for any mood $i,j = \{C,S,G\}$ on day $t$. The process ${X_t}$ is a Markov chain, namely its history, or state at time $t+1$ depends only on the state at time $t$. Notice that, for a transition matrix, the sum of the rows must be equal to one. The stationary distribution $\pi$ of a Markov chain is defined as
+
+$$
+  \pi P = \pi,
+$$
+where the entries of $\pi$ sum up to one. Notice that Markov chains have interesting theoretical properties that we do not address here.
+
+```{r}
+# Clear the workspace:
+rm(list=ls())
+
+# Set the seed:
+set.seed(1)
+
+# Define the transition matrix:
+P = matrix(c(0.5, 0.4, 0.1,
+             0.3, 0.4, 0.3,
+             0.2, 0.3, 0.5),
+           nrow=3, ncol=3, byrow=T)
+
+# Fix the initial state:
+p0 = 2
+
+# Set the number of simulations:
+G = 5000
+
+# Define the states' vector:
+pSim = vector(length = G)
+
+# Simulate the Markov chain:
+pCurr = p0
+for (i in 1:G){
+  pRow = pCurr
+  pNew = sample(1:3,1,prob=P[pRow,])
+  pCurr = pNew
+  pSim[i] = pCurr
+}
+
+# Compute the stationary distribution:
+pStat = table(pSim)/G
+
+# Generate
+pTheor = sample(1:3,G,prob=pStat,replace=T)
+pStatTheor = table(pTheor)/G
+
+# Generate a random sample from the stationary distribution
+barplot(pStat, xlab="Mood", ylab="p(Mood)", border=NA, col = "steelblue")
+barplot(pStatTheor, xlab="Mood", ylab="p(Mood)", add=TRUE, col="NA", border = "red")
+legend("topright", legend = c("Simulated", "Theoretical"),
+       fill=c('steelblue',NA), border=c(NA, 'red'), box.lwd = 1)
+
+# Compute the autocorrelation function:
+par(mfrow=c(1,2))
+acf(pTheor)
+acf(pSim)
+```
+
+
+## 2. Markov Chain Monte Carlo (MCMC)
+
+Assume, as we usually do, that $Y \sim p(y \mid \theta)$ and a prior distribution $\pi(\theta)$. In general, is not always possible to obtain a posterior distribution $\pi(\theta \mid y) = p(y|\theta)\,\pi(\theta) \,/ \int p(y|\theta')\,\pi(\theta') \mathrm{d}\theta'$ that is available in closed form due to the calculation of the integral in the denominator.
+
+If we were able to sample from $\pi(\theta \mid y)$, then we could generate $\theta^{(1)}, \ldots , \theta^{(S)} \iid \pi(\theta \mid y)$ and obtain a Monte Carlo approximation of the posterior distribution. Conversely, Markov Chain Monte Carlo (MCMC) methods are designed to sample in the opposite situation in which $\pi(\theta \mid y)$ in unkown.
+
+MCMC methods involves a number of algorithms to obtain a sequence of parameter estimates $\{\theta^{(1)}, \ldots ,\theta^{(S)}\}$, like in the introductory examples, which however depend on the draw from the previous iteration -- for which reason the sequence is a Markov chain.
+
+
+### Metropolis-Hastings
+
+The Metropolis-Hastings (MH) algorithm is a general method in that it can be applied for any probability distribution, provided that we know a function that is proportional to it. The MH algorithm is, hence, very appealing because it is not necessary to compute the density's normalization constant. The key ingredients of a MC algorithm are:
+
+-   the kernel of the target distribution $f(\theta)$, that is a distribution known up to a normalization constant and proportional to the desired probability distribution $P(\theta)$;
+
+-   A proposal distribution $Q\left(\theta^* \mid \theta\right)$, which is used for sampling and is similar to the true density $P(\theta)$.
+
+*Algorithm (MH)*: given the current estimate of $\theta$,
+
+1.  generate a new value $\theta^*$ from the proposal distribution $Q\left(\theta^* \mid \theta\right)$;
+2.  compute the acceptance rate as
+    $\alpha = \min\left\{1,\frac{f(\theta^*)\,Q(\theta \mid \theta^*)}{f(\theta)\,Q(\theta^* \mid \theta)}\right\}$;
+3.  accept $\theta^*$ as the updated estimate if $u < \alpha$, where $u$ is sampled from the uniform distribution $U \sim \mathscr{U}(0,1)$, otherwise reject it.
+
+The algorithm can be initialized using an arbitrary value $\theta_0$. Typically, the proposal distribution is assumed to be symmetric, i.e. $Q(\theta \mid \theta^*) = Q(\theta^* \mid \theta)$, e.g. normally distributed -- random walk Metropolis-Hastings. In this case the acceptance rate simplifies to $\alpha = \min\{1,f(\theta^*)/f(\theta)\}$. Finally, notice that, in our context, the kernel is a function of the parameters and data that is proportional to the posterior density.
+
+
+#### Example 1: *Normal -- Normal model*
+
+As a toy example, we generate $S=10000$ samples from a Normal -- Normal model and use the MH algorithm. As a starting value we consider $\theta^{(0)} = 0$ and for each iteration $s=1,\ldots,S$ of the algorithm we assume a Normal proposal distribution, $\theta^{(s+1)} \sim \mathscr{N}(\theta^{(s)},\delta^2)$, where the variance $\delta^2 = 2$ is a hyperparameter.
+
+The Normal -- Normal model reads,
+
+$$
+\begin{align*}
+x_1,\dots,x_n\mid\mu & \overset{i.i.d.}\sim\mathscr{N}(\mu,\sigma^2), \\
+\mu & \sim \mathscr{N}(\mu_0,\tau^2),
+\end{align*}
+$$
+
+where $\sigma^2=1$, $\tau^2=10$, and $\mu_0=5$. The posterior distribution is written as $\pi(\mu\mid x)=Cp(y\mid \mu)\pi(\mu)$, where $C$ is a normalizing constant, and we assume a symmetric proposal $Q(\mu\mid\mu^*)=Q(\mu\mid\mu^*)$. Thus, the acceptance rate is
+
+$$
+\alpha=\min\left\{1,\frac{Cp(y\mid \mu^*)\pi(\mu^*)Q(\mu\mid\mu^*)}{Cp(y\mid \mu)\pi(\mu)Q(\mu^*\mid\mu)}\right\}=\min\left\{1,\frac{p(y\mid \mu^*)\pi(\mu^*)}{p(y\mid \mu)\pi(\mu)}\right\}
+$$
+
+The approximation of the posterior $\pi(\mu\mid x)$ is run as follows.
+
+```{r}
+# Clear the workspace:
+rm(list=ls())
+
+# Set the seed:
+set.seed(1)
+
+# Generate the data:
+n=5
+y = round(rnorm(n,10,1),2)
+
+# Set the hyperparameters:
+s2 = 1 
+t2 = 10
+mu = 5
+delta = 2
+
+# Run the MH algorithm:
+theta = 0
+S = 10000
+THETA = NULL;
+
+for(s in 1:S) {
+  
+  # Draw a new par. from the proposal:
+  theta.star = rnorm(1,theta,sqrt(delta))
+  
+  # Compute the (log) acceptance rate:
+  log.r = (sum(dnorm(y,theta.star,sqrt(s2),log=TRUE)) +
+             dnorm(theta.star,mu,sqrt(t2),log=TRUE)) -
+    (sum(dnorm(y,theta,sqrt(s2),log=TRUE)) +
+       dnorm(theta,mu,sqrt(t2),log=TRUE))
+  
+  # Accept or reject the new par:
+  if ( log(runif(1)) < log.r) { 
+    theta = theta.star
+    }
+  
+  # Update if accepted:
+  THETA = c(THETA,theta)
+}
+
+# Compute the (True) posterior parameters:
+mu.n = (mean(y)*n/s2 + mu/t2) / (n/s2+1/t2) 
+t2.n = 1/(n/s2+1/t2)
+
+# Plot the results:
+par(mfrow=c(1,2), mar=c(3,3,1,1),mgp=c(1.75,.75,0))
+skeep = seq(10,S,by=10)
+th = seq(min(THETA),max(THETA),length=1000)
+
+# Get the trace plot:
+plot(skeep,THETA[skeep],type="l",xlab="Iteration",
+     ylab=expression(mu),main="Trace plot")
+abline(h=mu.n,col="red",lty=2)
+
+# Get the true and estimated density:
+hist(THETA[-(1:50)], ylim=c(0,1), prob=TRUE,
+     xlab=expression(mu),main="")
+lines(th,dnorm(th,mu.n,sqrt(t2.n)))
+legend("topright", legend = c("Simulated", "Theoretical"),bty="n",
+       fill=c('grey',NA),border=c("black",NA),lwd=c(NA,1))
+```
+
+
+#### Example 2: *the* `sparrows` *dataset*
+
+A sample of 52 female song sparrows was studied over the course of a summer and their reproductive activities were recorded. In particular, the age and number of new offspring were recorded for each sparrow (Arcese et al, 1992).
+
+Given $y_i\sim\mathscr{P}ois(\lambda_i)$, consider the Poisson regression model
+
+$$
+  \log E(y_i) = \log\lambda_i = \beta_0 + \beta_1 x_{1,i} + \ldots + \beta_{p-1}x_{p-1,i}.
+$$
+
+so it is a log-linear model and thus falls within the class of generalized linear models (GLM). The Poisson regression is a model for $n$ responses $y_1,\ldots,y_n$ that take (positive) integer count values. As a matter of fact, using the linear regression model on these data may lead to negative values for the predictions. We assume a normal prior for the coefficients and rewrite the model as follows,
+
+$$
+\newcommand{\ind}{\stackrel{\small\mathrm{ind}}{\sim}}
+\begin{align*}  
+y_i \mid \mathbf{x}_i, \beta &\ind \mathscr{P}ois\left(\text{e}^{\mathbf{x}_i^{\prime}\beta}\right), \\
+\beta &\sim \mathscr{N}_{p}(0, 10I_p),
+\end{align*}
+$$
+
+where $\mathbf{\beta} = (\beta_0,\ldots,\beta_{p-1})$ is a $p$-dimensional vector of regression coefficients, $\mathscr{N}_{p}(\cdot,\cdot)$ denotes a $p$-dimensional (multivariate) normal distribution and $I_p$ is a $p\times p$ identity matrix.
+
+We can show that the posterior distribution of $\beta$ is not analytically tractable, hence we rely on MCMC algorithms.
+
+We implement a MH algorithm with a symmetric proposal distribution and $\pi(\beta\mid y)\propto p(y\mid \beta)\pi(\beta)$. Similarly to the previous example, the acceptance rate is $\alpha= \min\{1,p(y\mid \beta^*)\pi(\beta^*)/p(y\mid \beta)\pi(\beta)\}$. Finally, as a proposal distribution, we consider $\beta^*\sim\mathscr N_2(\beta,s^2(\textbf X^T \textbf X)^{-1})$, where $s^2$ is the sample variance of $\log(\textbf y +\frac12)$.
+
+```{r}
+# Clear the workspace:
+rm(list=ls())
+
+# Set the seed:
+set.seed(1)
+
+# Load the library for drawing
+# from a multivariate normal:
+library("mvtnorm")
+
+# Load the data:
+load("sparrows.Rdata")
+sparrows = as.data.frame(sparrows)
+
+# Prepare the data:
+y = sparrows[,1]
+sparrows$age2 = (sparrows$age)^2
+X = as.matrix(sparrows[,-1])
+n = length(y)
+p = dim(X)[2]
+
+# Set the hyperparameters:
+pmn.beta = rep(0,p) 
+psd.beta = rep(10,p)
+
+# Set the variance of the proposal:
+var.prop = var(log(y+1/2))*solve(t(X)%*%X)
+
+# Initial values of the parameters:
+beta = rep(0,p)
+S = 10000
+BETA = matrix(0, nrow=S, ncol=p) 
+
+# Run the MH algorithm:
+for (s in 1:S) {
+  
+  # Draw from the proposal:
+  b = rmvnorm(1,beta,var.prop)
+  beta.p = t(b)
+  
+  # Compute the (log) acceptance rate:
+  log.r = (sum(dpois(y, exp(X%*%beta.p), log=T)) + 
+             sum(dnorm(beta.p, pmn.beta, psd.beta, log=T))) - 
+    (sum(dpois(y, exp(X%*%beta), log=T)) +
+       sum(dnorm(beta, pmn.beta, psd.beta, log=T)))
+  
+  # Accept or reject the new par:
+  if ( log(runif(1)) < log.r ) {
+    beta = beta.p
+    }
+  
+  # Update if accepted:
+  BETA[s,] = beta
+}
+
+# Plot the results:
+par(mar=c(2.75,2.75,.5,.5),mgp=c(1.7,.7,0))
+par(mfrow=c(2,3))
+blabs = c(expression(beta[1]),expression(beta[2]),expression(beta[3]))
+nThin = c(1,(1:1000)*(S/1000))
+
+# First coefficient:
+j=1
+
+# Trace plot:
+plot(nThin,BETA[nThin,j],type="l",xlab="Iteration",ylab=blabs[j])
+abline(h=mean(BETA[,j]))
+
+# Autocorrelation plot:
+acf(BETA[,j],ci.col="gray",xlab="lag")
+acf(BETA[nThin,j],xlab="lag/10",ci.col="gray")
+
+# Second coefficient:
+j=2
+
+# Trace plot:
+plot(nThin,BETA[nThin,j],type="l",xlab="Iteration",ylab=blabs[j])
+abline(h=mean(BETA[,j]))
+
+# Autocorrelation plot:
+acf(BETA[,j],ci.col="gray",xlab="lag")
+acf(BETA[nThin,j],xlab="lag/10",ci.col="gray")
+
+# Plot the coefficients' distribution:
+par(mfrow=c(1,2))
+hist(BETA[,1], probability = T, xlab = blabs[1], main= blabs[1])
+lines(density(BETA[,1]))
+hist(BETA[,2], probability = T, xlab = blabs[2], main = blabs[2])
+lines(density(BETA[,2]))
+```
+
+
+### Exercise 2
+
+Consider a model where the data are distributed according to the double exponential distribution, more commonly referred to as the Laplace distribution, that is
+
+$$
+x_i \stackrel{i.i.d.}{\sim} f(x|\mu) := \frac{1}{2} e^{- |x-\mu|},
+$$
+
+where $\mu \in \mathbb{R}$ is a parameter with prior
+
+$$
+\mu \sim \mathscr{N}(m_0,s_0^2).
+$$
+
+The posterior is then proportional to 
+
+$$
+\pi(\mu|x_1,\dots,x_n) \propto e^{- \sum_{i=1}^n |x_i-\mu|
+-\frac{1}{2s_0^2}(\mu-m_0)^2}. 
+$$
+
+Use the `rlaplace` function from the `extraDistr` to generate an artificial dataset from the above double-exponential density (with $n=80$ and $\mu=5$). See the code below. 
+
+```{r}
+# Load the library:
+library(extraDistr)
+
+# Set the 
+n = 80
+mutrue = 5
+
+# Generate the data:
+xdata = rlaplace(n,mutrue,1)
+
+# Plot the simulated and true data: 
+tt = seq(-5,15,0.1)
+dens = dlaplace(tt,mutrue,1)
+hist(xdata,probability=TRUE,ylim=c(0,max(dens)),
+     main="Simulated and true density",xlab="x")
+lines(tt,dens)
+```
+
+Complete the following tasks:
+
+1.  Write a random-walk Metropolis-Hastings algorithm with normal proposal to sample from the posterior. Assume the prior parameters are $m_0=0$ and $s_0^2=10$. Given the data in `xdata`, use the MH algorithm to approximate the posterior of $\mu$ and the predictive distribution of a new data point;
+
+2. Plot the approximate posterior distribution of $\mu$ (as an histogram) and find an (approximate) 95% credible interval for $\mu$;
+
+3. Plot the (histogram of the approximate) predictive distribution togheter with the pdf of thetrue distribution ($\mu=5$);
+
+Specify the starting point you used in your MCMC, the variance of the proposal, the number of iterations and the
+burn in period you choose. 
+
+Hint: be careful with the variance of the proposal (choose a variance not too big)  and take a starting point not too far from the true value of the parameter. 
+
+```{r}
+
+# Write your code here.
+
+```
+
+
+### The Gibbs sampler
+
+As seen in the previous sections, the MH algorithm can used under most of the circumstances. However, it is quite intensive from the computational point of view and it may be difficult to find a good proposal distribution.
+
+It turns out that a more efficient algorithm is available when we can sample from the **full conditional (posterior) distribution of each parameter**, i.e. conditional on the other parameters' estimates at the current iteration.
+
+We introduce the Gibbs sampler (GS) with an example. Consider the model,
+
+$$
+\begin{align*}
+  y_i \mid \mu, \sigma^2 &\iid \mathscr{N}(\mu, \sigma^2), \qquad i=1,\dots,n, \\
+  \mu &\sim \mathscr{N}(\mu_0, \tau^2_0 ), \\
+  \sigma^2 &\sim \mathscr{IG}(\alpha/2,\beta/2),
+\end{align*}
+$$
+
+which is semi-conjugate, because:
+
+-   if we fix $\sigma^2$, the prior of $\mu$ is conjugate with the likelihood (Normal-Normal model);
+
+-   if we fix $\mu$, the prior of $\sigma^2$ is conjugate with the likelihood (Normal-Inverse Gamma model).
+
+The distributions $\pi(\mu \mid \sigma^2, y_1,\dots,y_n)$ and $\pi(\sigma^2 \mid \mu, y_1,\dots,y_n)$ are called the full conditional distributions of $\mu$ and $\sigma^2$, respectively, as they are conditional distributions with respect to the data and all remaining parameters, i.e. $\sigma^2$ and $\mu$ respectively.
+
+*Algorithm (GS)*: given the current estimate of the parameters $\phi^{(s)} = \{\mu^{(s)}, \sigma^{2(s)}\}$, we update their values as follows:
+
+1.  sample $\mu^{(s+1)}$ from $\pi(\mu \mid \sigma^{2(s)}, y_1,\ldots,y_n)$;
+2.  sample $\sigma^{2(s+1)}$ from $\pi(\sigma^{2} \mid \mu^{(s+1)}, y_1,\dots, y_n)$;
+
+Finally, denote with $\phi^{(s+1)} = \{\mu^{(s+1)}, \sigma^{2(s+1)}\}$ the parameters' updates. In practice it is a two-stage algorithm.
+
+The GS algorithm is a MCMC method since it generates a sequence of parameter estimates $\phi^{(s+1)}$ which only depends on their values at the previous iteration $\phi^{(s)}$. The full conditional distributions are $\mu|\sigma^2,y_1,\ldots,y_n\sim\mathscr{N}(\mu_n,\tau_n^2)$ and $\sigma^2|\mu,y_1,\ldots,y_n \sim \mathscr{IG}(\alpha_n/2,\beta_n/2)$ where
+
+$$
+\begin{align*}
+  &\mu_n = \frac{\frac{\mu_0}{\tau_0^2}+\frac{n\bar{y}}{\sigma^2}}{\frac{1}{\tau_0^2}+\frac{n}{\sigma^2}},\qquad
+  &\tau_n^2 =  \frac{1}{\frac{1}{\tau_0^2}+\frac{n}{\sigma^2}}, \\
+  &\alpha_n = \alpha_0+n, \qquad
+  &\beta_n = \beta_0+\bar{S}_y,
+\end{align*}
+$$
+
+where $\bar{S}_y = \sum_{i=1}^{n}(y_i-\mu_n)^2$ and $\bar{y} = n^{-1}\sum_{i=1}^{n}y_i$ (prove it!).
+
+The GS is implemented as follows. Through the algorithm we sample $1/\sigma^2$ from the Gamma distribution by recalling that if $\sigma^2\sim\mathscr{IG}(\alpha/2,\beta/2)$, then $\frac{1}{\sigma^2}\sim\mathscr{G}a(\alpha/2,\beta/2)$. Thus, to recover the distribution of $\sigma^2$ for e.g. credible intervals, we need to compute the inverse operation (otherwise we would obtain the distribution of the precision).
+
+
+```{r}
+rm(list=ls())
+set.seed(1)
+
+# Set the hyperparameters:
+mu0 = 1.9
+t20 = 0.95^2
+s20 = 0.01
+nu0 = 1
+
+# Create some data:
+y = c(1.64, 1.70, 1.72, 1.74, 1.82, 1.82, 1.82, 1.90, 2.08)
+
+# Compute the statistics:
+mean.y = mean(y)
+var.y = var(y)
+n = length(y)
+
+# Initialize the algorithm:
+S = 1000
+PHI = matrix(nrow=S, ncol=2)
+phi = c(mean.y, 1/var.y)
+PHI[1,] = phi
+
+# Run the GS:
+for(s in 2:S) {
+  
+  # Sample a new mu from its full conditional:
+  mun = (mu0/t20 + n*mean.y*phi[2]) / (1/t20 + n*phi[2])
+  t2n = 1/(1/t20 + n*phi[2])
+  phi[1] = rnorm(1, mun, sqrt(t2n))
+
+  # Sample a new 1/sigma^2 from its full conditional:
+  nun = nu0+n
+  s2n = s20+sum((y-mun)^2)
+  phi[2] = rgamma(1, nun/2, s2n/2)
+  
+  # Store the new values:
+  PHI[s,] = phi
+}
+
+
+# Set the graphical parameters:
+par(mfrow=c(1,3),mar=c(2.75,2.75,.5,.5),mgp=c(1.70,.70,0))
+
+# Plot the first 5, 15, and 100 iterations for the GS:
+m1=5
+plot(PHI[1:m1,], type="l", xlim=range(PHI[1:100,1]), ylim=range(PHI[1:100,2]),
+     lty=1, col="gray", xlab=expression(mu), ylab=expression(1/sigma^2))
+text(PHI[1:m1,1], PHI[1:m1,2], c(1:m1))
+
+m1=15
+plot(PHI[1:m1,], type="l", xlim=range(PHI[1:100,1]), ylim=range(PHI[1:100,2]),
+     lty=1, col="gray", xlab=expression(mu), ylab=expression(1/sigma^2))
+text(PHI[1:m1,1], PHI[1:m1,2], c(1:m1))
+
+m1=100
+plot(PHI[1:m1,], type="l", xlim=range(PHI[1:100,1]), ylim=range(PHI[1:100,2]),
+     lty=1, col="gray", xlab=expression(mu), ylab=expression(1/sigma^2))
+text(PHI[1:m1,1], PHI[1:m1,2], c(1:m1))
+```
+
+
+```{r}
+# Compute the credible intervals:
+cat("CI for the population mean:\n")
+quantile(PHI[,1],c(.025,.5,.975))
+cat("\nCI for the population standard deviation:\n")
+quantile(1/sqrt(PHI[,2]),c(.025,.5, .975))
+
+```
+
+```{r}
+suppressWarnings({
+  
+# Set the graphical parameters:
+par(mfrow=c(1,3),mar=c(2.75,2.75,.5,.5),mgp=c(1.70,.70,0))
+sseq=1:1000
+
+# Build a grid of values:
+G = 100
+H = 100
+mean.grid = seq(1.505,2.00,length=G)
+prec.grid = seq(1.75,175,length=H)
+post.grid = matrix(nrow=G,ncol=H)
+
+# Plot the joint posterior:
+image(mean.grid,prec.grid,post.grid,col=gray((10:0)/10),
+      xlab=expression(mu),ylab=expression(1/sigma^2) ,
+      xlim=range(PHI[,1]),ylim=range(PHI[,2]))
+points(PHI[sseq,1],PHI[sseq,2],pch=".",cex=2)
+
+# Plot the full conditional posterior of mu:
+plot(density(PHI[,1],adj=2),main="",xlab=expression(mu),
+     ylab=expression(paste(italic("p("),mu,"|",y,")", sep="")))
+abline(v=quantile(PHI[,1],prob=c(.025,.975)),lwd=2,col="gray")
+
+# Plot the full conditional posterior of 1/sigma^2:
+plot(density(PHI[,2],adj=2), xlab=expression(1/sigma^2),main="",
+     ylab=expression( paste(italic("p("),1/sigma^2,"|",y,")",sep="")))
+abline(v=quantile(PHI[,2],prob=c(.025,.975)),lwd=2,col="gray")
+
+})
+```
+
+The first panel shows 1000 samples from the Gibbs sampler plotted over the grid defined in the code. The second and third panels return the kernel density estimates of the Gibbs samples of $\mu$ and $\tilde{\sigma}^2$. Vertical gray bars on the second plot indicate $2.5\%$ and $97.5\%$ quantiles of the Gibbs samples of $\mu$, while nearly identical black vertical bars indicate the $95\%$ confidence interval based on the t-test.
+
+
+### Example 3: *Cauchy data*
+
+In the context of regression we introduced the Jeffreys-Zellner-Siow prior to avoid the subjective choice of the parameter $g$ for the prior distribution of the regression coefficients.
+
+Similarly, yet now concerning the data we assume that
+
+$$
+  x_1,\ldots,x_n\overset{\text{i.i.d.}}{\sim}\mathscr{C}a(\mu,\sigma),
+$$
+
+where $\mathscr{C}a(\mu,\sigma)$ denotes the Cauchy distribution with location $\mu$ and scale $\sigma$. In general, the Student $t$ density with $\nu$ degrees of freedom can be obtained as a scale mixture of normal densities, that is
+
+$$
+  t_\nu(\mu,\sigma) \sim\int_0^\infty\mathscr{N}\left(x|\mu,\frac{\sigma}{\lambda}\right)\mathscr{G}a\left(\lambda|\frac{\nu}{2},\frac{\nu}{2}\right)d\lambda,
+$$
+
+where the location is denoted by $\mu$ and the scale by $\sigma$. Thus, the Cauchy distribution is a particular case of the Student $t$ distribution with $\nu=1$.
+
+We would like to estimate $\mu$ and $\sigma$ given a sample for which the Cauchy law seems a reasonable assumption. Given the relationship above, we assume that:
+
+$$
+  \begin{align*}
+  & x_i\overset{\text{i.i.d.}}{\sim}\mathscr{N}\left(\mu,\frac{\sigma}{\lambda_i}\right), \\
+    & p(\mu,\sigma) \propto \sigma^{-1}, \\
+    & \lambda_i \overset{\text{i.i.d.}}{\sim}\mathscr{G}a\left(\frac{\nu}{2},\frac{\nu}{2}\right), \qquad i=1,\ldots,n,
+  \end{align*}
+$$
+
+but the posterior distribution is not analytically tractable. However, we are able derive the full conditional posteriors, that is
+
+$$
+  \begin{align*}
+    & p(\lambda_i|\mu,\sigma,x_i) \overset{\text{i.i.d.}}{\sim} \mathscr{G}aa \left(\frac{\nu+1}{2},\frac{1}{2}\left(\nu+\frac{(x_i-\mu)^2}{\sigma}\right)\right), \\
+    & p(\mu|\lambda_1,\ldots,\lambda_n,\sigma,x_1,\ldots,x_n) \sim \mathscr{N} \left(\frac{\sum_{i=1}^nx_i\lambda_i}{\sum_{i=1}^n \lambda_i},\frac{\sigma}{\sum_{i=1}^n \lambda_i}\right), \\
+    & p(\sigma|\lambda_1,\ldots,\lambda_n,\mu,x_1,\ldots,x_n) \sim \mathscr{IG}\left(\frac{n}{2},\frac{1}{2} \sum_{i=1}^n \lambda_i(x_i-\mu)^2\right),
+  \end{align*}
+$$
+
+which allow us to implement a GS algorithm. Notice that, compared to the introductory example of the GS, we have now three steps, and not only two, because we have to firstly sample $\lambda_i$. 
+
+The algorithm is provided as follows: we consider a burn-in period, as for the MH algorithm, but implement also the *thinning*, that is we remove an arbitrary number of consecutive simulations for every simulation that is retained to avoid autocorrelation in the parameter estimates. In the end, we compute and exhibit the autocorrelation function to check for any residual correlation.
+
+
+```{r}
+# Clear the workspace:
+rm(list=ls())
+
+# Set the seed:
+set.seed(1)
+
+# Load the library for sampling from
+# the inverse-gamma distribution:
+suppressMessages({ library(MCMCpack) })
+
+# Load the data:
+x = c(0.09, 0.07, 0.08, 0.05, 0.06, 0.09, 0.07, 0.09,
+      0.05, 0.07, 0.06, 0.05, 0.03, 0.04, 0.03, 0.04)
+
+# Initialize the algorithm:
+
+nSim = 50000
+nBurn = 10000
+nThin = 100
+nSave = (nSim-nBurn)/nThin
+
+n = length(x)
+muVec = rep(NA, nSave)
+sigmaVec = rep(NA, nSave)
+lambdaMat = matrix(NA, nrow=nSave, ncol=n)
+predVec = rep(NA, n)
+predMat = matrix(NA, nrow=nSave, ncol=n)
+
+mu = 6
+sigma2 = 4
+lambdaVec = rep(1,n)
+
+# Run the GS algorithm:
+
+for (j in 1:nSim) {
+  
+  # Sample lambda_i from its full cond. distr:
+  for (i in 1:n) {
+    
+    beta = (1+((x[i]-mu)^2)/sigma2)/2
+    lambdaVec[i] = rgamma(1,1,beta)
+    }
+    
+    # Sample mu from its full cond. distr:
+    mean_mu = sum(lambdaVec*x) / sum(lambdaVec)
+    var_mu = sigma2 / sum(lambdaVec)
+    mu = rnorm(1, mean_mu, sqrt(var_mu))
+    
+    # Sample sigma^2 from its full cond. distr:
+    a = n/2
+    b = sum((x-mu)^2*lambdaVec)/2
+    sigma2 = rinvgamma(1, a, b)
+    
+    # Sample from the predictive:
+    for (i in 1:n) {
+      
+      varpred = sigma2 / lambdaVec[i]
+      predVec[i] = rnorm(1, mu, sqrt(varpred))
+      }
+    
+    if (j> nBurn) {
+      
+      if ( (j-nBurn) %% nThin == 0 ) {
+        
+        muVec[(j-nBurn)/nThin] = mu
+        sigmaVec[(j-nBurn)/nThin] = sigma2
+        predMat[(j-nBurn)/nThin,] = predVec
+        lambdaMat[(j-nBurn)/nThin,] = lambdaVec
+        }
+      }
+    }
+```
+
+The `MCMCpack` library was used to sample from the inverse gamma distribution and depends on other libraries which include functions to display the results. For example, the `traceplot` and `as.mcmc` are used to produce the trace plot. Moreover, we check for the presence of autocorrelation in the chains and then plot the stationary distributions of the parameters and the predictive density of new data.
+
+```{r}
+layout(matrix(c(1,1,2,3), 2, 2, byrow = TRUE))
+traceplot(as.mcmc(muVec),ylab=expression(mu),main="")
+acf(muVec,main="")
+hist(muVec,breaks=20,xlab=expression(mu),main="")
+
+layout(matrix(c(1,1,2,3), 2, 2, byrow = TRUE))
+traceplot(as.mcmc(sigmaVec),ylab=expression(sigma),main="")
+acf(sigmaVec,main="")
+hist(sigmaVec,breaks=40,xlab=expression(sigma),main="")
+
+par(mfrow=c(1,1))
+hist(predMat,breaks=200,xlab=expression(x),
+     main="Predictive density")
+```
+
+For an interactive demo of MCMC methods, check out this [link](https://chi-feng.github.io/mcmc-demo/app.html){.uri}.
+
+
+### Exercise 3
+
+Consider the Pareto  model, 
+
+$$
+  x_i \stackrel{i.i.d.}{\sim} f(x|a,c) := \frac{ac^a}{x^{a+1}}I(x>c)
+$$
+
+where $a>0$ and $c>0$.
+
+Assume the improper flat prior for $(a,c)$ on $(0,+\infty)\times (0,+\infty)$, that is
+
+$$
+  \pi(a,b)=I(a>0,c>0)
+$$
+
+Complete the following tasks:
+
+1. Generate a sample of artificial data from this model with $a=4$ and $c=2$ and sample size $n=120$ (you may use `rpareto(120,4,2)` after loading the library `extraDistr`);
+
+2. Write a Gibbs sampler for the parameters and fit the data you have generated in point 1. 
+
+3. Display the trace plots and the approximate posterior densities of the parameters $(a,c)$.
+
+This exercise is more difficult, so you may need the following hints:
+
+A) To write the full conditionals posteriors you need the likelihood of $(x_1,\dots,x_n)$, that is
+
+$$
+  L(a,c|x_1,\dots,x_n) =\prod_{i=1}^n \frac{a c^{a}}{x_i^{a+1}} I(x_i>c)=
+  a^n c^{an} e^{-(a+1)\sum_{i=1}^n \ln(x_i)} I(c < x_{min})=
+  a^n e^{ a n \ln(c)-(a+1)\sum_{i=1}^n \ln(x_i)} I(c < x_{min})
+$$
+for $x_{min}=\min(x_1,\dots,x_n)$. 
+
+B) In the Gibbs sampler you need to sample a random variable $C$ with density 
+
+$$
+c\mapsto \frac{A}{B^{A}}c^{A-1}I( c \in (0,B)) = f_{poly}(c|A,B)
+$$
+
+for suitable  $A>0$ and $B>0$. To do this, you can take
+
+$$
+  C=B U^{1/A} \quad \text{with} \quad U \sim Unif(0,1).
+$$
+Indeed, for $0<c<B$,
+
+$$
+  P\{B U^{1/A} \leq c \}=P\{ U \leq (c/B)^A \}=(c/B)^A = F_{poly}(c|A,B)
+$$
+where $F_{poly}(c|A,B)=\int_0^c f_{poly}(t|A,B)dt$ is the CDF of $C$.
