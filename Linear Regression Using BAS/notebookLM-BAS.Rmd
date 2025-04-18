@@ -1,0 +1,230 @@
+---
+title: "Linear Regression (using BAS)"
+output: html_notebook
+---
+
+
+##  Warm up: simple linear regression.
+
+For our example we use a dataset contained in the library BAS. We first uplaod the library and see the row data 
+"bodyfat". 
+
+```{r}
+library(BAS)
+data(bodyfat)
+bodyfat$Density=c() # revmove this variable 
+summary(bodyfat)
+#bodyfat$Bodyfat=(bodyfat$Bodyfat-mean(bodyfat$Bodyfat))/sd(bodyfat$Bodyfat)
+#help(bodyfat)
+```
+
+This data frame includes 252 observations of men’s body fat and other measurements, such as waist circumference (Abdomen). See help(bodyfat) in R. 
+
+
+As warming up exercise we start by a simple linear regression:  
+$$
+y_i = \beta_1 x_{i1} + \beta_0 +\epsilon_i \quad \epsilon_i \stackrel{iid}{\sim} N(0,1)
+$$
+
+
+We use as $y_i$ the variable Bodyfat and as covariate $x_{i1}$ the variable Abdomen. We start by fitting  a frequentistic Linear Model (simple regression)
+
+```{r}
+bodyfat.lm = lm(Bodyfat ~ Abdomen, data = bodyfat)
+summary(bodyfat.lm)
+beta = coef(bodyfat.lm)
+```
+
+Let us plot the regression line. 
+
+```{r}
+plot(bodyfat$Abdomen,bodyfat$Bodyfat,xlab="abdomen circumference (cm)",ylab="body fat")
+abline(beta,col='red')
+```
+
+
+
+We can easily obtain residuals,  compute the MS,  plot the residuals and make the QQ-plot.
+
+REMEMBER: all this stuff if NOT Bayesian!!! We do this for comparison!! (bad experience with previous students!)
+ 
+```{r}
+resid = residuals(bodyfat.lm)
+n = length(resid)
+MSE = 1/ (n - 2) * sum((resid ^ 2))
+qqnorm(resid/sd(resid)) 
+qqline(resid/sd(resid))
+plot(resid)
+abline(h=0,col="red")
+```
+```{r}
+MSE
+```
+
+
+
+# Linear regression
+
+In a normal linear regression problem, the likelihood is
+
+$$
+y=(y_1,\dots,y_n)  \sim \mathscr{N}_{n}(\beta_0 \mathbf{1} + \beta X, \sigma^2 I_n) 
+\quad \beta=(\beta_1,\dots,\beta_k)
+$$
+
+where $\mathbf{1}$ is a vector of ones of length $n$ and $I_n$ is the identity matrix.
+
+Again as warm up exercise, let us  fit the  full model above  in a frequentistic way (MLE)
+using R. 
+
+```{r}
+fulllm=lm(Bodyfat ~ ., data = bodyfat)
+summary(fulllm)
+```
+
+
+
+# Bayesian regression using BAS
+
+
+We now use the BAS package to fit a Bayesian Linear Regression model. BAS is mainly designed to fit a hierarchy of nested models (including and excluding the various covariates) in order to perform model 
+selection and model averaging. Here we  use BAS just to fit one single (given) model.
+More will be done in the LAB sessions with the TA. 
+
+We first fit the model using a g-prior (Zellner) with constant=20.  This is done by specifying 
+the string "modelprior = Bernoulli(1), include.always = ~ ., n.models = 1". Model prior is the prior over the various models, in this case using a Ber(1) we include with probability 1 all the covariates in the prior (and hence also in the posterior). This corresponds to a prior which gives mass 1 to the complete model. 
+The command n.models =1 specifies that we take into consideration only the first model (in this case the full model, due to the form of the prior). 
+Finally "include.always = ~ ."  specifies the fact that in the model we include the intercept $\beta_0$. 
+
+Omitting the prior description on $\beta_0$, recall that the (centered) Zellner prior is 
+
+$$
+\begin{split}
+& \beta=(\beta_1,\dots,\beta_k) \\
+\beta|\sigma^2,X &\sim \mathscr{N}_{k}(0,\alpha \sigma^2(X^t X)^{-1})\\
+\sigma^2|X  & \sim \pi(\sigma^{2})=\sigma^{-2}  \qquad   \alpha>0.
+\end{split}
+$$
+
+
+In the book $\alpha$ is $c$. 
+
+
+
+We take $\alpha=30$ and fit the model with BAS. 
+
+```{r}
+alphapar=30
+cog.bas = bas.lm(Bodyfat ~ ., data =  bodyfat, prior="g-prior",alpha=alphapar, modelprior = Bernoulli(1), include.always = ~ ., n.models = 1)
+beta = coef(cog.bas)
+beta
+```
+
+
+We plot the posterior densities of the $\beta$s. 
+
+```{r}
+plot(beta, subset = 1:10, ask = F)
+```
+
+To obtain credible intervals for coefficients, BAS includes a confint method to create Highest Posterior (5%) Bodyfat intervals for  the summaries from coef.
+
+
+
+```{r}
+confint(beta)
+plot(confint(beta),main=paste("g-prior alpha=",alphapar))
+
+```
+
+
+We now choose a suitable mxitrue of Zellner prior, more specifically the Zellner-Siow prior. A ZS prior is simply a mixture of Zellner prior, i.e. 
+$$
+\begin{split}
+& \beta=(\beta_1,\dots,\beta_k) \\
+\beta|\sigma^2,X &\sim \mathscr{N}_{k}(0,\alpha \sigma^2(X^t X)^{-1})\\
+\sigma^2|X  & \sim \pi(\sigma^{2})=\sigma^{-2}  \\
+& 1/\alpha \sim \pi_0 = Gamma(1/2,n/2)
+\end{split}
+$$
+
+Note that choosing other form for $\pi_0$ one obtains other Zellner type priors, some of them are implemented in BAS. 
+
+
+
+```{r}
+cog.basZS = bas.lm(Bodyfat ~ ., data =  bodyfat, prior="JZS", modelprior = Bernoulli(1), include.always = ~ ., n.models = 1)
+#plot(cog.basZS, which=4)
+betaZS = coef(cog.basZS)
+betaZS
+plot(betaZS,subset = 2:7, ask = F)
+```
+
+Let us compare the $\beta$s estimates under the two different priors
+
+
+```{r}
+par(mfrow=c(2,2))
+plot(confint(beta),main=paste("g-prior alpha=",alphapar))
+confint(betaZS)
+plot(confint(betaZS),main="ZS-prior ")
+```
+
+
+BAS has methods defined to return fitted values using the observed design matrix and predictions at either the observed data or potentially new values, as with lm.
+
+
+```{r}
+n=40
+nend=length(bodyfat[,1])
+newdata<-bodyfat[1:n,]
+datalearning<-bodyfat[seq(n+1,nend),]
+#dim(datalearning)
+rownames(datalearning)=seq(1:length(datalearning[,1]))
+
+cog.basZS2 = bas.lm(Bodyfat ~ ., data =  datalearning, prior="JZS", modelprior = Bernoulli(1), include.always = ~ ., n.models = 1)
+betaZS2 = coef(cog.basZS2)
+#plot(confint(betaZS2),main="ZS-prior ")
+
+
+
+fitted<-predict(cog.basZS2, estimator = "BMA")
+prednew <- predict(cog.basZS2,newdata=newdata, estimator = "BMA")
+```
+
+Below we plot true values vs fitted and predicted. Black points are 
+true vs fitted in the learning dataset and red points are true vs predicted in the additional part of the data set (not used for fitting the model).
+
+
+```{r}
+plot(fitted$Ypred[1:length(fitted$Ypred)],datalearning$Bodyfat[1:length(fitted$Ypred)],
+  pch = 16,
+  xlab = expression(hat(mu[i])), ylab = 'Y',type="p")
+
+
+points(prednew$Ypred, newdata$Bodyfat,
+  pch = 16,
+  col="red",type="p"
+)
+abline(0, 1)
+
+
+#prednew$Ypred 
+#newdata$Bodyfat
+
+
+BPM <- predict(cog.basZS2, estimator = "BPM", newdata=newdata,se.fit = TRUE)
+conf.fit <- confint(BPM, parm = "mean")
+conf.pred <- confint(BPM, parm = "pred")
+plot(conf.pred, main="Out of sample: pred. (black) vs true (red)")
+points(seq(1:n),newdata$Bodyfat,col="red")
+
+```
+
+
+
+
+For much more see https://cran.r-project.org/web/packages/BAS/vignettes/BAS-vignette.html
+
+see also 
+https://www.sciencedirect.com/science/article/pii/S030440761200156X
