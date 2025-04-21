@@ -1,0 +1,910 @@
+---
+title: "Bayesian Regression"
+output:
+  html_document:
+    df_print: paged
+---
+
+**TA**: Andrea Viselli ([andrea.viselli\@polimi.it](mailto:andrea.viselli@polimi.it))
+
+
+## 1. The linear model
+
+Linear regression is an approach for modelling the relationship between a scalar *response* - also referred to as the *dependent* or *target variable* - typically denoted by $y$, and one or more explanatory variables, namely the *regressors* - or *covariates*, *independent variables*, *predictors* -  given in a matrix $\mathbf{X} \in \mathbb{R}^{n \times p}$. In particular, such a relationship is assumed to be **linear** in the parameters of the equation, although some of the regressors might not be linear.
+
+The case of one explanatory variable (i.e. $p = 1$) is called **simple linear regression**; for more than
+one ($p \geq 2$), it is called **multiple linear regression**.
+
+The general setup consists of the target variable $y$ and design matrix $\mathbf{X}$, whose relationship is modelled as
+
+$$
+ y = X \beta + \varepsilon
+$$
+
+where $\varepsilon$ is an error term which is assumed to have a Gaussian distribution with $0$-mean and variance $\sigma^2$. By the property of the Gaussian density, it follows that $y$ is also normally distributed with mean $\mathbf{X}\beta$ and variance depending on the variance the error term, i.e. $\sigma^2$. For this reason, this is commonly called **Gaussian linear regression model**. We will consider such a framework also for Bayesian regression.
+
+**Questions of interest:**
+
+-   Which social factors influence unemployment duration and the probability of finding a new job?
+-   Which economic indicators are best related to recession occurrences?
+-   Which physiological levels are most strongly correlated with aneurysm strokes?
+-   What will be the aggregate health expenditure for Italy in 2026?
+    
+**Answers:**
+
+-   The linear regression model allows us to do inference of the parameters $\beta$, i.e. to compute         credible intervals and test hypotheses, to check whether there exists a significant association          between $X$ and $y$;
+-   Based on past data, we are able to fit an appropriate model for prediction of $y$ through $X$, that      is after learning the relationship between $X$ and $y$. 
+
+
+### *Example 1: modeling a generic curve*
+
+Despite its simplicity, linear regression can be a powerful way to approximating every function of real data. We consider the following Data Generating Process (DGP), namely a rule describing how the data were generated, given by
+
+$$
+ y = 1+0.5x^2+2\log x + \varepsilon, \qquad \text{ for } x \in [1,10]
+$$
+where $\varepsilon \sim \mathscr{N}(0,50)$ is the error term, also called *noise* or *disturbance*, because we usually collect data that are subject to measurement error.
+
+
+```{r}
+# Clear the workspace
+rm(list=ls())
+
+# pyplot-like plots in R
+library("ggplot2")
+ 
+# Generate data
+n = 50
+sigma2 = 50
+e = rnorm(n,0,sigma2^0.5) 
+x = seq(1,10,length.out=n)
+y = 1+0.5*x^2+2*log(x) + e 
+data = data.frame(x,y)
+
+f = function(x){
+  1 + 0.5*x^2+2*log(x)
+}
+
+# Plot
+g1 = ggplot(data=data, aes(x=x,y=y)) + 
+  geom_point() +
+  geom_function(fun=f, col="red")
+g1
+```
+
+The simulated data are spread around the true function, and not exactly equal to it, because of the noise component. You may change the variance of $\varepsilon$ to increase or decrease the variability of the dependent variable $y$.
+
+As an introduction to Bayesian linear regression, we consider a conjugate model where the variance $\sigma^2$ is known. The model setup is
+
+$$
+\begin{align*}
+  (y_1,\dots,y_n) \mid \beta &\sim \mathscr{N}_{n}\left(\, \mathbf{X}\beta, \sigma^2\mathbf{I}_{n} \,\right) \\[5pt]
+  \beta &\sim \mathscr{N}_{p}\left(\, \mu_{0}, \tau^2\mathbf{I}_{p} \,\right)
+\end{align*}
+$$
+
+where $\mathbf{X} \in \mathbb{R}^{n \times p}$ collects the covariates used to explain the responses
+$\left( y_1, \dots, y_n \right)$. However, to kick-start we consider a simple linear regression where 
+
+$$
+\mathbf{X}
+= 
+\begin{bmatrix}
+1 & x_1 \\
+1 & x_2 \\
+\vdots & \vdots \\
+1 & x_n
+\end{bmatrix}
+$$
+where the explanatory variable $(x_1,\ldots,x_n)$ was denoted by `x` in the chuck of code above, and is simply the range of values in the interval $[1,10]$. Notice that we include an intercept term (the column of ones), otherwise we force the regression line to pass through the origin.
+
+One may check that the posterior distribution is $\beta \mid \mathbf{y} \sim \mathscr{N}_{p}\left(\mu_n, S_n\right)$, where the parameters are defined as
+
+$$
+\begin{align*}
+  S_n &= \left(S_0^{-1} + \mathbf{X}^T\mathbf{X}/\sigma^2\right)^{-1} &\qquad \mu_n &= S_n\left(S_0^{-1}\mu_0 + \mathbf{X}^T\mathbf{y}/\sigma^2\right)
+\end{align*}
+$$
+
+Since we are interested in reconstructing the curve from the data points, we need the predictive distribution $\widehat{\mathbf{y}} \mid \mathbf{y},\mathbf{X}$, for which a closed expression is available. This is
+
+$$
+\widehat{\mathbf{y}} \mid \mathbf{y},\mathbf{X} \sim \mathscr{N}\left(\mu_n^T\mathbf{X}, \sigma^2 + \mathbf{X}^TS_n\mathbf{X}\right).
+$$
+
+```{r}
+# Construct the design matrix
+p = 2
+X = matrix(c(rep(1,n),x),n,p)
+
+# Prior hyperparameters (non-informative)
+m0 = matrix(0,p,1)
+S0 = diag(x=1000,p,p)
+
+# Posterior parameters
+SN = solve(solve(S0) + t(X) %*% X/sigma2) # `solve()` computes the inverse
+mN = SN %*% (solve(S0) %*% m0 + t(X) %*% y/sigma2)
+
+# Predictive distribution in the same points
+y_hat = t(mN) %*% t(X)
+sigma2_hat = array(0, n)
+for(i in 1:n){
+ sigma2_hat[i] = sigma2 + X[i,] %*% SN %*% X[i,]
+}
+
+# Plot
+g_bayes = g1 + 
+  geom_line(aes(x=x,y=y_hat[1,], color="Predictive"), linewidth=1) +
+  geom_function(aes(color="True Function"), fun = f, linewidth=1) +
+  geom_ribbon(aes(x=x,y=y_hat[1,],
+                  ymin=y_hat[1,]-1.96*sigma2_hat^0.5,
+                  ymax=y_hat[1,]+1.96*sigma2_hat^0.5, 
+                  fill="95% C.S."), alpha=0.2) +
+  scale_color_manual(name="Curves", values=c('blue','red')) +
+  scale_fill_manual(name="Bands", values='blue')
+g_bayes
+```
+
+A few comments:
+
+-   The red line is the true function of $y$ and the black points are the data that we simulated;
+-   The blue line is the *expected value* (also called *fitted value*) of the predictive distribution at     each point $x$, i.e. $\widehat{y} = E(y|x) = X\beta$;
+-   The shaded blue area corresponds to the $95\%$ credible interval of the predictive
+    distribution.
+-   The fit is not "good", as the points at the two extremes are predicted to be lower than the true         ones whereas those in the middle are predicted to be higher.
+
+Thus, we would like to improve the fit of the model to the data by including further covariates. Since any nonlinear function can be approximated by a polynomial, we may consider
+
+$$
+y = \beta_0+\beta_1x+\beta_2x^2+\beta_3x^3+\ldots
+$$
+
+and truncate the summation at some degree $p$. We consider this approach and truncate at $p=2$, that is we include up to a squared transformation of the data $x$.
+
+```{r}
+# Construct the new design matrix
+p = 3
+X = matrix(c(rep(1,n),x,x^2),n,p)
+
+# Prior hyperparameters (non-informative)
+m0 = matrix(0,p,1)
+S0 = diag(x=1000,p,p)
+
+# Posterior parameters
+SN = solve(solve(S0) + t(X) %*% X/sigma2)
+mN = SN %*% (solve(S0) %*% m0 + t(X) %*% y/sigma2)
+
+# Predictive distribution in the same points
+y_hat = t(mN) %*% t(X)
+sigma2_hat = array(0, n)
+for(i in 1:n){
+ sigma2_hat[i] = sigma2 + X[i,] %*% SN %*% X[i,]
+}
+
+# Plot
+g_bayes = g1 + 
+  geom_line(aes(x=x,y=y_hat[1,], color="Predictive"), linewidth=1) +
+  geom_function(aes(color="True Function"), fun = f, linewidth=1) +
+  geom_ribbon(aes(x=x,y=y_hat[1,],
+                  ymin=y_hat[1,]-1.96*sigma2_hat^0.5,
+                  ymax=y_hat[1,]+1.96*sigma2_hat^0.5, 
+                  fill="95% C.S."), alpha=0.2) +
+  scale_color_manual(name="Curves", values=c('blue','red')) +
+  scale_fill_manual(name="Bands", values='blue')
+g_bayes
+```
+
+
+### *Example 2: estimate the body fat percentage*
+
+The `bodyfat` dataset lists estimates of the percentage of body fat determined by underwater weighting and various body circumference measurements for $252$ men. Accurate measurement of body fat is costly and it is desirable to have simpler and more convenient methods.
+
+```{r}
+# An easy-to-use package for Bayesian Linear Regression
+library("BAS")
+
+# Clear the workspace
+rm(list=ls())
+
+# Load dataset (in the BAS package)
+data(bodyfat)
+head(bodyfat)
+```
+
+The dataset comprehends several variables that may be used to estimate the body fat, see `help(bodyfat)`. We believe that the circumference of the abdomen, expressed in cm, may be a good predictor of percent body fat.
+
+```{r}
+# Plot
+hist = ggplot(data=bodyfat, aes(x=Bodyfat)) + 
+  geom_histogram(aes(y=after_stat(density)), color='steelblue', fill='lightblue',
+                 bins = 20) +
+  ggtitle("Histogram of Bodyfat") + ylab("Density")
+scatter = ggplot(data=bodyfat, aes(x=Abdomen, y=Bodyfat)) +
+  geom_point(color='steelblue') +
+  ggtitle("Bodyfat vs. Abdomen") + xlab("Abdomen circumference (cm)")
+gridExtra::grid.arrange(hist, scatter, ncol=2)
+```
+
+
+## 2. Frequentist linear regression
+
+We consider a simple linear regression model where $y_i$ and $x_i$ denote percent body fat and the abdomen's circumference (cm), respectively. For unit $i$, the model is formulated as
+$$
+y_i = \beta_0+ \beta_1 x_i + \epsilon_i \qquad i=1,\dots,n
+$$
+
+where $\varepsilon_i\sim\mathscr{N}(0,\sigma^2)$. In the classical frequentist framework, estimation is carried out by ordinary least squares (OLS). 
+
+The function `lm` quickly performs the task.
+
+```{r}
+# Frequentist linear model
+bodyfat.lm = lm(Bodyfat ~ Abdomen, data = bodyfat)
+summary(bodyfat.lm)
+```
+
+```{r}
+# Extract coefficients
+beta = coef(bodyfat.lm)
+
+# Visualize regression line on the scatter plot
+ggplot(data = bodyfat, aes(x = Abdomen, y = Bodyfat)) +
+  geom_point(color = "steelblue") +
+  geom_abline(intercept = beta[1], slope = beta[2], col='darkorange') +
+  xlab("Abdomen circumference (cm)") + ylab("Body fat (pc)") + 
+  ggtitle("Regression Line")
+```
+
+The classical approach allows us to compute confidence intervals, $t$-tests on the regression coefficients, and other diagnostics as shown in the output of `summary(bodyfat.lm)`.
+
+
+## 3. Bayesian linear regression
+
+From a modelling point of view, nothing changes when shifting from a frequentist to a Bayesian perspective. That is, the relationship between the dependent and independent variables is modelled in the same way:
+
+$$
+y_i = \beta_0 + \beta_1 x_i + \epsilon_i,  \quad \varepsilon_i\sim\mathscr{N}(0,\sigma^2),
+$$
+
+However, we change our method for estimating the parameters $\beta_0$, $\beta_1$, and $\sigma^2$, and for carrying out inference.
+
+In particular, we set a prior and then update it to obtain the posterior densities of the unknown parameters $\beta_0$, $\beta_1$ and $\sigma^2$ based on the dependent variable $(y_1, \dots, y_n)$ and independent variable $(x_1, \dots, x_n)$, where $n$ is the number of observations.
+
+We assume a **non-informative** prior, i.e.
+
+$$
+\begin{align*}
+\pi\left(\, \beta_0,\beta_1 \mid \sigma^2 \,\right) &\propto 1 \\[5pt]
+\pi\left(\sigma^2\right) &\propto \frac{1}{\sigma^2}
+\end{align*}
+$$
+
+Thus we apply the Bayes' rule to derive the joint posterior distribution after observing the data $y_1, \ldots, y_n$. The posterior distribution of $\sigma^2$ is an Inverse-Gamma,
+
+$$
+\sigma^2 \mid \mathbf{y} \sim \mathscr{IG}\left(\frac{n-2}{2}, \frac{SSE}{2}\right),
+$$
+
+where $SSE = \sum_{i=1}^{n}\widehat{\varepsilon}_{i}^2$ is the sum of squares of errors (SSE). Finally, the posterior distributions of the coefficients read
+
+$$
+\begin{align}
+& \beta_0 \mid \sigma^2, \mathbf{y} \sim \mathscr{N}\left(\widehat{\beta}_0, \sigma^2 \left(\frac{1}{n}+\frac{\bar{x}^2}{S_{xx}}\right)\right), \\
+& \beta_1 \mid \sigma^2, \mathbf{y} \sim \mathscr{N}\left(\widehat{\beta}_1, \frac{\sigma^2}{S_{xx}}\right),
+\end{align}
+$$
+
+where $\widehat{\beta}_0$ and $\widehat{\beta}_1$ are the OLS (or MLE in the Gaussian model), estimates of the coefficients, and $S_{xx} = \sum_{i=1}^n (x_i - \bar{x})^2$.
+
+In other words, under the reference prior, the **posterior credible intervals are in fact numerically equivalent to the confidence intervals from the frequentist OLS estimation**.
+
+Since the credible intervals are numerically the same as the confidence intervals, we can use the `lm` function to obtain the OLS estimates and construct the credible intervals of $\beta_0$ and $\beta_1$.
+
+```{r}
+output = summary(bodyfat.lm)$coef[, 1:2]
+output
+```
+
+The `confint` function provides $95\%$ confidence intervals. Under the reference prior, they are equivalent to the $95\%$ credible intervals. The code below extracts them and relabels the output as the Bayesian results.
+
+```{r}
+out = cbind(output, confint(bodyfat.lm))
+colnames(out) = c("posterior mean", "posterior std", "2.5", "97.5")
+round(out, 3)
+```
+
+These intervals coincide with the confidence intervals from the frequentist approach. Nevertheless, the primary difference is the interpretation.
+
+For example, based on the data, we believe that there is a $95\%$ chance that $\beta_1$ is in the credible interval $[0.575,0.688]$, i.e., we believe that there is $95\%$ chance that body fat will increase by $5.75\%$ up to $6.88\%$ for every additional $10$ centimeter increase in the abdomen circumference.
+
+```{r}
+# Construct current prediction
+alpha = bodyfat.lm$coefficients[1]
+beta = bodyfat.lm$coefficients[2]
+new_x = seq(min(bodyfat$Abdomen), max(bodyfat$Abdomen), 
+            length.out = 100)
+
+y_hat = alpha + beta * new_x
+
+# Get lower and upper bounds for mean
+ymean = data.frame(predict(bodyfat.lm,
+                           newdata = data.frame(Abdomen = new_x),
+                           interval = "confidence",
+                           level = 0.95))
+
+# Get lower and upper bounds for prediction
+ypred = data.frame(predict(bodyfat.lm,
+                           newdata = data.frame(Abdomen = new_x),
+                           interval = "prediction",
+                           level = 0.95))
+
+output = data.frame(x = new_x, y_hat = y_hat,
+                    ymean_lwr = ymean$lwr, ymean_upr = ymean$upr,
+                    ypred_lwr = ypred$lwr, ypred_upr = ypred$upr)
+
+# Plot
+plot1 = ggplot(data = bodyfat, aes(x = Abdomen, y = Bodyfat)) + 
+  geom_point(color = "steelblue") + xlab("Abdomen circumference (cm)") +
+  geom_line(data = output, aes(x = new_x, y = y_hat, color = "first"),lty=1) +
+  geom_line(data = output, aes(x = new_x, y = ymean_lwr, lty = "second")) +
+  geom_line(data = output, aes(x = new_x, y = ymean_upr, lty = "second")) +
+  geom_line(data = output, aes(x = new_x, y = ypred_upr, lty = "third")) +
+  geom_line(data = output, aes(x = new_x, y = ypred_lwr, lty = "third")) + 
+  scale_colour_manual(values="darkorange", labels="Posterior Mean", name="") +
+  scale_linetype_manual(values = c(1, 2), labels = c("Mean", "Predictions"),
+                        name = "95% C.I.")
+plot1
+```
+
+Note in the above figure the legend "C.I." can either mean *confidence interval*
+or *credible interval*. The difference boils down to its interpretation.
+
+As we can see from the previous figure, we observe a datum which cannot be easily
+predicted by our model, as it is far away from the $95\%$ credible interval we
+computed. This is usually called *outlier.*
+
+```{r}
+# Extract potential outlier data point
+outlier = data.frame(x = bodyfat$Abdomen[39], y = bodyfat$Bodyfat[39])
+
+# Identify potential outlier
+plot1 + geom_point(data=outlier, aes(x=x, y=y), color="red", pch=1, cex=6)
+```
+
+In fact, we are not able to provide a proper prediction for this datum. Indeed,
+if we compute it we get the following:
+
+```{r}
+# Prediction for the outlier
+pred.39 = predict(bodyfat.lm, newdata = bodyfat[39, ], interval = "prediction", level = 0.95)
+out = cbind(bodyfat[39,]$Abdomen, pred.39)
+colnames(out) = c("abdomen", "prediction", "lower", "upper")
+print(out)
+```
+
+Based on the data, a Bayesian would expect that a man with waist circumference
+of $148.1$ centimeters should have body fat of $54.216\%$ with $95\%$ chance
+that it is between $44.097\%$ and $64.335\%$.
+
+While we expect the majority of the data will be within the prediction intervals, as exhibited by the dashed lines, unit 39 seems to be well below, outside the interval.
+
+This example was taken from
+[here](https://statswithr.github.io/book/introduction-to-bayesian-regression.html){.uri}.
+
+
+### Exercise 1
+
+The `mtcars` dataset is a classic in R that provides various automobile attributes for different car models. It contains $32$ observations on $11$ variables.
+
+Two of the relevant variables for this exercise are:
+
+- `mpg`: Miles per gallon — a measure of fuel efficiency.
+- `hp`: Gross horsepower — a measure of engine power.
+
+We aim to explore how horsepower affects fuel efficiency by fitting a simple linear regression.
+
+1. Fit a linear regression model with `mpg` as the dependent variable and `hp` as the independent variable.
+2. Plot the actual data points using the `plot()` function.
+3. Add the fitted regression line using `abline()`.
+4. Add 95% confidence and prediction bands.
+
+```{r}
+# Load the dataset
+data(mtcars)
+
+# write here your code
+```
+
+
+### *Example 3: Zellner's g-priors*
+
+Now that we have warmed up, we consider more than a single explanatory variable. In the remainder, we will denote $X$ as a $n\times p+1$ matrix.
+
+The prior density reads
+
+$$
+\beta\mid\sigma^2\sim\mathscr N_{k}\left(0,g \, \sigma^2 (X^{\prime}X)^{-1} \right)\\
+(\beta_0,\sigma^2)\sim\pi(\beta_0,\sigma^2)=\sigma^{-2}
+$$
+
+which is thus decomposed as a (conditional) Gaussian prior for $\beta$ and an improper (Jeffreys) prior for $(\beta_0,\sigma^2)$.
+
+The hyperparameter $g>0$ can be interpreted as describing the weight given to the data compared to prior knowledge. For instance, setting $g = n$ gives the prior the same weight as one observation of the sample, thus corresponding to a noninformative prior.
+
+Now, we estimate a number of model specifications with the function `bas.lm` using the Zellner's g-prior and one predictor, namely `bodyfat$Abdomen`. Among the inputs, we set `modelprior=Bernoulli(1)` to include all the covariates in the model with probability 1 (otherwise the routine also fits submodels) and we use several values of $g = (0.001,0.01,0.1,1,10,n)$.
+
+Notice that in `bas.lm` we need to specify the value of $g$ with the argument `alpha`.
+
+```{r}
+library(latex2exp)
+library("BAS")
+
+output = data.frame(x=numeric(0),y_hat=numeric(0),alpha=numeric(0))
+
+# Calculate centered Abdomen circumference
+X = bodyfat$Abdomen-mean(bodyfat$Abdomen)
+
+n = length(X)
+new_x = seq(min(bodyfat$Abdomen), max(bodyfat$Abdomen), length.out = 100)
+
+for(alpha in c(0.001,0.01,0.1,1,10,n)){
+  
+  # Fit Bayesian linear model using g-prior and the current value of alpha
+  bodyfat.blm = bas.lm(bodyfat$Bodyfat ~ X, prior="g-prior", alpha=alpha,
+                       modelprior=Bernoulli(1))
+  
+  # Extract the posterior means of the intercept and the beta coefficients
+  intercept = coef(bodyfat.blm)$postmean[1]
+  beta = coef(bodyfat.blm)$postmean[2]
+  
+  # Calculate the predicted value of body fat percentage for the values in the 
+  # range of Abdomen circumference
+  y_hat = intercept + beta *(new_x - mean(bodyfat$Abdomen))
+  
+  # Append the results to the output data frame
+  output = rbind(output, data.frame(x = new_x, y_hat = y_hat, alpha=alpha))
+}
+
+output$alpha = as.factor(output$alpha)
+
+# Plot
+plot1 = ggplot(data = bodyfat, aes(x = Abdomen, y = Bodyfat)) + 
+  geom_point(color = "steelblue") + xlab("Abdomen circumference (cm)") +
+  geom_line(data = output, aes(x = x, y=y_hat, group=alpha, color=alpha),lty=1) +
+  scale_colour_manual(values=rainbow(length(levels(output$alpha))),name=TeX("$\\alpha$")) 
+plot1
+```
+
+When $g$ is small, the posterior predicted values are similar to a model where only the intercept different from zero and the slopes are not, while as $g$ increases the posterior predictions are more and more similar to the outcome of a model using a noninformative prior.
+
+Let's discuss the results in the object `bodyfat.blm`, corresponding to the choice of $g=252$ (it is the last item we iterated over in the loop), i.e. an improper prior.
+
+
+### Exercise 2
+
+After setting up $\alpha$ as to have a noninformative prior, choose an arbitrary set of regressors and fit a multiple linear regression model. Then store the coefficients in `coef(bodyfat.blm)` and plot their posterior distribution (this is easy, you may just do `plot(coef(bodyfat.blm))`). Finally, use the `confint(coef(beta))` function to compute the coefficients' HPD and plot them (very easy, again).
+
+```{R}
+X = bodyfat[,3:4]
+alpha = 10^3
+
+# Copy-paste the estimation function from the
+# previous example.
+```
+
+
+## 4. Model selection
+
+We introduce this topic with an example. We load the `cognitive` dataset which includes a sample of kids' cognitive scores and some information about their mothers, namely:
+
+-   Mother's high school status (`hs`);
+-   Mother's IQ score (`IQ`);
+-   Whether or not the mother worked during the first three years of the kid's
+    life (`work`);
+-   Mother's age (`age`).
+
+Our aim is to predict the kids' cognitive score using the predictors above. We might consider to use all available information, i.e. all variables, choose an appropriate Bayesian model (as we did above), and end up with an estimate of the parameter posterior distribution.
+
+However, because every subset of the explanatory variables is a proper set itself, how to choose the subset of variables that have more power for predicting the cognitive score? We need a method to compare $2^p$ models, where the intercept is included in every model.
+
+In the remainder we will try to answer these questions. In other words, we want to select the "best" model according to some criterium or method. This procedure is usually referred to as **model selection**.
+
+We open the data, parse it, and operate some data pre--processing.
+
+```{r}
+rm(list=ls())
+
+# Open the dataset (make sure to download it!)
+cognitive = read.table("cognitive.txt", header = TRUE)
+head(cognitive)
+```
+
+The data reveal that the variables `mom_hs` and `mom_work` are categorical variables. We transform them into indicator variables where `mom_work = 1` if the mother worked for 1 or more years, and similarly `mom_hs = 1` if the mother has more advanced education than high school education.
+
+You can check the changes by printing the data.
+
+```{r}
+# Turn the variables' type into numbers (double):
+cognitive$mom_work = as.numeric(cognitive$mom_work > 1)
+cognitive$mom_hs = as.numeric(cognitive$mom_hs > 0)
+
+# Rename the dataframe's columns:
+colnames(cognitive) = c("kid_score", "hs", "IQ", "work", "age")
+str(cognitive)
+```
+
+We aim to compare $2^p$ alternative specifications of the linear model $y_{i} = X_{i} \beta + \varepsilon_{i}$ for kid $i$, as we include or exclude each predictor. Given that there is no relationship, or dependence among the kids, we safely assume $\varepsilon_i$ to be independent and identically normally distributed,
+
+$$
+\newcommand{\iid}{\stackrel{\small\mathrm{iid}}{\sim}}
+\varepsilon_i \iid \mathscr{N}(0,\sigma^2),
+$$
+
+with variance $\sigma^2$, common to all observations. We specify the prior distributions for the coefficients $\beta_{0},\ldots,\beta_{4}$ using the Zellner's g-prior, as seen in Example 3. 
+
+$$
+\begin{align*}
+  \beta \mid \sigma^2 &\sim \mathscr{N}_{p}\left(\mathbf{0},\,g\,\sigma^2\left(X^{\prime}X\right)^{-1}\right), \\
+  \sigma^2 &\sim \pi\left(\sigma^2\right) \propto\sigma^{-2}.
+\end{align*}
+$$
+
+Recall that by setting $g = n$ we use an improper prior, that is a density which does not integrate to one, although the corresponding posterior distribution is proper. We typically consider an improper, or noninformative prior when we aim to to carry out an objective inference, namely independent of subjective preferences.
+
+Type `help(bas.lm)` for more information (a lot!) on how to estimate a variety of models. This time we spend more time on the inputs of the `bas.lm` function:
+
+- the `prior` argument is used to choose the parameters' prior. For example, `"g-prior"` and `"JZS"` (the Jeffreys-Zellner-Siow prior) are possible choices. Be careful, however, that alternative priors may require different mandatory arguments, like the parameter `alpha` for the Zellner's g-prior;
+
+- the `modelprior` argument is important in the context of model selection and specifies the prior on the alternative models. In other words, while we set a prior on the parameters, we can also put a prior over the model specifications, thus attaching a prior probability of selecting each model. Possible choices are, for instance, `"uniform()"`, `"beta.binomial()"` (default) and `"Bernoulli()"`.
+
+
+```{r}
+library("BAS")
+
+# Number of observations:
+n = ncol(cognitive)
+
+# Use `bas.lm` to run regression model:
+cog.bas = bas.lm(kid_score ~ ., data = cognitive, prior = "g-prior", 
+                 modelprior = uniform(), alpha = n)
+
+# Objects of interest:
+cog.coef = coef(cog.bas, estimator = "HPM")
+cog.models = data.frame(Models = sapply(cog.bas$which,paste,collapse=','))
+cog.postprobs = round(cog.bas$postprobs,2)
+
+# Model posterior probabilities of selection:
+data.frame(PostProbs = cog.postprobs, row.names = cog.models$Models)
+```
+
+A couple of clarifications:
+
+- the argument `estimator = "HPM"` in `coefficients()` returns the model with highest posterior probability (we see in the next section that `bas.lm()` by default does BMA);
+- `cog.postprobs` displays the posterior probability of selecting the models, where each model is estimated using a different subset of the explanatory variables as indicated in the data frame above;
+- In `cog.coef`, the column `P(B != 0)` indicates the posterior probability that each variable's coefficient is non-zero computed using the marginal likelihoods (yet the models are aggregated using BMA, as we see later on!).
+
+It is interesting to visualize the coefficients' posterior densities using the `plot` function. We use the `subset()` argument to plot the coefficients on the predictors and exclude the intercept.
+
+```{r}
+# Plot the marginal posterior distributions:
+par(mfrow = c(2, 2))
+plot(cog.coef, subset = 1:3, ask = F)
+```
+
+Similarly to what requested in Exercise 1, we compute the credible intervals together with the estimate of the posterior mean.
+
+```{r}
+# Credible intervals:
+cog.confint = confint(cog.coef)
+cog.confint[,1:3]
+```
+
+In conclusion, the `bas.lm` function gives us the opportunity to consider several models and play with variable selection. As an example, try to use a different prior, both on the coefficients and models!
+
+
+### Example 4: *Bayesian Information Criterion (BIC)*
+
+The Bayesian information criterion (BIC) is a very popular metric used in model selection. It is defined as
+
+$$
+BIC = −2\ln\left[p\left(\mathbf{y} \mid \widehat{\beta},\, \widehat{\sigma}^2,\, M\right)\right]+(p+1)\ln(n),
+$$
+
+where $n$ is the number of observations, $p$ is the number of predictors (without the intercept), and $\mathscr{L}\left(\mathbf{y} \mid \beta,\, \sigma^2,\, M\right)$ is the data likelihood given the coefficients $\beta$ and the variance $\sigma^2$ for model $M$. Denote with $\left(\widehat{\beta},\, \widehat{\sigma}^{2}\right)$ the maximum likelihood estimate (MLE), then the BIC is computed using the likelihood evaluated at its maximum.
+
+Suppose that the distribution of the data belongs to the exponential family (e.g. the Gaussian distribution). Then, as the sample size $n$ grows, the following approximation holds,
+
+$$
+  BIC \approx -2 \ln (p(\mathbf{y}|M))
+$$
+
+which involves the marginal likelihood under model $M$. There exists a close relationship between the $BIC$ and the Bayes Factor, that was introduced for hypotheses testing but has applications in model selection. Given two models $M_1$ and $M_2$, the corresponding Bayes factor is approximated by their BICs as
+
+$$
+  BF[M_1:M_2]=\frac{p(\mathbf{y}\mid M_1)}{p(\mathbf{y}\mid M_2)} \approx \frac{\exp\{-\frac{1}{2}\text{BIC}_{1}\}}{\exp\{-\frac{1}{2}\text{BIC}_{2}\}} = \exp\left\{-\frac{1}{2}(\text{BIC}_{1}-\text{BIC}_{2})\right\},
+  \qquad \text{ as } n\rightarrow\infty.
+$$
+
+which may be useful to discriminate between the two models using the Jeffreys' scale.
+
+The way we operate the model selection with `BAS` is to set the argument `prior = "BIC"`. However, the prior on the coefficients is the non--informative prior that was introduced in Section 3, i.e.
+
+$$
+  \pi\left( \beta \mid \sigma^2 \right) \propto 1, \qquad
+  \pi\left( \sigma^2 \right) \propto \frac{1}{\sigma^2}.
+$$
+
+At this point, *you may have some confusion*.
+
+**REMARK**: the BIC criterion is **NOT** a prior (though `bas.lm` is misleading in how it invokes the BIC), it is a variable selection technique. In general, the parameters may have one of the priors introduced above, like the basic non--informative prior, the Normal-Gamma conjugate prior, or the Zellner's G-prior. In this case, `bas.lm` uses the non--informative prior as the default prior.
+
+Now, we use the BIC to operate the model selection and assign an equal prior probability to each model $M_m$ using `modelprior = uniform()`, that is $P(M_m) = 1/16$, for each $m=1,\ldots,2^4$.
+
+```{r}
+cog.BIC = bas.lm(kid_score ~ ., data = cognitive,
+                 prior = "BIC", modelprior = uniform())
+
+round(summary(cog.BIC), 3)
+```
+
+where:
+
+- `P(B!=0 | Y)` is the posterior inclusion probability of each variable, or $P(\beta_j\neq 0|\mathbf{y})$;
+- for each variable, a value of $1$ or $0$ in the remaining columns indicate whether that variable is included in the respective model;
+- `BF` is the Bayes factor, where the benchmark model (at the numerator) is the one with highest posterior probability;
+- `PostProbs` indicates the posterior probability of selecting the model;
+- `dim` returns the number of variables (including the intercept) in the model;
+- `logmarg` is the logarithm of the marginal likelihood, approximately equal to $-0.5\text{BIC}$.
+ 
+Notice that the models are ranked according to `PostProbs`, and thus not surprisingly by `logmarg` as well. It follows that the first model's `BF` is equal to 1. To see the relationship among these metrics, recall that model $m$ posterior probability can be written as
+
+$$
+  p(M_m|\mathbf{y}) = \frac{BF[M_m:M_b]\times O[M_m:M_b]}{\sum_{j=1}^{2^p}BF[M_j:M_b]\times O[M_j:M_b]},
+$$
+
+where $M_b$ is the benchmark model and $O[M_j:M_b] = p(M_j)/p(M_b)$ is the prior odd.
+
+In principle, we would like to retain the best model according to such metrics. We do it as follows.
+
+```{r}
+# Find the index of the model with largest `logmarg`:
+cog.best = which.max(cog.BIC$logmarg)
+
+# Print the selected subset of variables:
+selectedVars = cog.BIC$which[[cog.best]]+1
+cog.BIC$namesx[selectedVars]
+
+# Alternatively, more simply:
+cog.coef = coefficients(cog.BIC, estimator = "HPM")
+```
+
+We notice that only the intercept (indexed as 0), the mother's high school status variable `hs` (indexed as 1), and the mother's IQ score `IQ` (indexed as 2) are selected in the best model.
+
+When we deal with a large number $p$ of predictors, it may be difficult to discriminate among them. In addition, differences in the log marginal likelihoods may be subtle when the explanatory variables are correlated or there are groups of variables that have similar information.
+
+The following figure is useful to investigate such patterns in the variables across the models. On the $x$--axis, the models are ranked according to the log posterior odds,
+
+$$
+  \ln(PO[M_m:M_b]) = \ln(BF[M_m:M_b]\times O[M_m:M_b]),
+$$
+
+which, because $O[M_m:M_b]=1$ for all models, the log of posterior odd is the same as the log of the Bayes factor.
+
+```{r}
+# Visualize the selected variables:
+image(cog.BIC, rotate = F)
+```
+
+
+## 5. Bayesian Model Averaging (BMA)
+
+Although it is tempting to pick the best model and directly employ it, there is an alternative and powerful option which involves using all models. Using `BAS`, unless we want to pick a single model or exclude some of them, the default option is to combine all models.
+
+In fact, different models may be informative in ways that single models do not, and achieve a better fit if the parameters of the data generating process, i.e. the unknown law which generates the data, vary in subgroups of the sample or a sudden change in the law occurs.
+
+For instance, the simple average of the models' prediction is a very common aggregation method to compute the final prediction,
+
+$$
+  \widehat{y}_i = \sum_{j=1}^{2^p} \widehat{y}_{i}^{(j)},
+$$
+
+where $\widehat{y}_{i}^{(j)} = E(y_i|M_j)$ is the prediction produced under model $j$, $M_j$. It turns out that the simple average performs quite well in practice (and is typically very hard to beat!).
+
+However, there are more appealing methods to aggregate the models. In general, the Bayesian analysis allows us to consider inferences based on the distribution
+
+$$
+  p(\theta|y_i) = \sum_{j=1}^{2^p} p(\theta|\mathbf{y},M_j) \, p(M_j|\mathbf{y}),
+$$
+
+which is known as Bayesian model averaging (BMA), where $p(M_j|\mathbf{y}) = p(\mathbf{y}|M_j)p(M_j)/p(\mathbf{y})$ is the posterior probability of model $M_j$.
+
+It is immediate to see that the BMA predictions are obtained as a weighted average of the individual model predictions with weights given by the posterior probabilities of each model $M_j$, that is
+
+$$
+  \widehat{y}_i = \sum_{j=1}^{2^p} \widehat{y}_{i}^{(j)} \, p(M_j|\mathbf{y}).
+$$
+
+
+### Example 5: *Jeffreys-Zellner-Siow (JZS) priors*
+
+We introduce the JZS with an empirical application. You may think of this as an example of a potential project where you get a dataset and carry out the analysis.
+
+We consider data pertaining to the houses found in a given California district and some of their features based on the 1990 census data. The data are not cleaned and thus include missing values and outliers, which may reduce a model's predictive ability.
+
+In the remainder of this example, we remove the missing values but do not care about outliers. Then, we estimate a vanilla model using the JZS prior. Notice that, as an exercise, you are encouraged to further analyse and pre-process the data, such as removing the extreme observations, and repeat the task of model estimation. Furthermore, you can improve the model's predictive ability by taking transformations (e.g. polynomials, interactions, et cetera) of the variables in the dataset.
+
+You can find more info at the following link:
+
+- https://www.kaggle.com/datasets/camnugent/california-housing-prices?resource=download
+
+We start off by loading the data.
+
+```{r}
+rm(list=ls())
+
+# Open the `housing.csv` dataset:
+housing = read.csv("housing.csv", header = TRUE)
+
+# Features of the variables:
+str(housing)
+```
+
+The preliminary analysis of the data reveals the presence of the categorical variable `ocean_proximity`, which is however classified as `character`. We do not care about this as `bas.lm` automatically treat it as a categorical variable. Nevertheless, we would like to see what are their levels, i.e. the categories.
+
+In addition, from a preliminary visualization you may see many data points which have assigned the same value of `median_house_value`, corresponding to the max of its distribution. We are going to delete such data because it impacts the estimation (a careful analysis would, however, investigate why such data are present and what are they due to).
+
+```{r}
+# Clean the data:
+housing = housing[-which(housing$median_house_value == max(housing$median_house_value)),]
+
+# Variable transformation:
+housing$median_house_value = log(housing$median_house_value)
+
+# Summary statistics:
+summary(housing)
+
+# Levels of `ocean_proximity`:
+unique(housing$ocean_proximity)
+```
+
+There are `200` missing data points in the variable `total_bedrooms`, so we remove the corresponding observations. Notice that `bas.lm` would automatically remove missing values, yet it is a good idea to be aware of their presence with a careful preliminary analysis.
+
+```{r}
+# Remove missing values:
+missingIndex = which(is.na(housing$total_bedrooms))
+housing = housing[-missingIndex,]
+```
+
+In the following chunk of code, we produce the scatterplots of the target variable in our analysis, `median_house_value`, and each predictor in the dataset. This step may be insighful for discovering particular relationships among the variables which would require some data transformations. In our data we do not see any special relationship, so we proceed without transforming any variable.
+
+Notice that we took the log of `median_house_value` because of the very different scale it has compared to the other variables. In presence of differences in scales, in fact, estimation can be negatively affected.
+
+```{r}
+# Load `ggplot2`:
+library("ggplot2")
+
+# Change the layout:
+par(mfrow = c(2,2))
+
+# Visualization (1)
+varsIndex1 = c(1:4)
+for (j in varsIndex1) {
+  plot(housing[,j], housing[,9], 
+       xlab = colnames(housing)[j], ylab = colnames(housing)[9])
+}
+
+# Visualization (2)
+varsIndex2 = c(5:8)
+for (j in varsIndex2) {
+  plot(housing[,j], housing[,9], 
+       xlab = colnames(housing)[j], ylab = colnames(housing)[9])
+}
+```
+
+We use the **Jeffreys-Zellner-Siow** (JZS) prior and BMA to produce predictions for `median_house_value`. While the denomination "JZS" is used in the `BAS` library, it is commonly known as the Zellner-Siow prior. The reason for being called JZS is due to the improper prior that is put on the variance of the error term $\sigma^2$.
+
+Because the Zellner's $g$ prior involves a subjective choice regarding the value of $g$, an objective approach is to put a prior on $g$, thus having a **hierarchical prior**. The JZS prior is based on a Cauchy prior on the coefficients $\beta_j|\sigma^2$, which can be represented as a mixture of $g$ priors with an Inverse-Gamma$(1/2,n/2)$ prior on $g$, that is
+
+$$
+\begin{align*}
+  & p(\beta_j|\sigma^2) = \int N\left(\beta_j|\mathbf{0},g \, \sigma^2(X^{\prime}X)^{-1}\right)p(g)dg, \\
+  & \text{where} \quad p(g) = \frac{(n/2)^{1/2}}{\Gamma(1/2)}g^{-3/2}\exp^{-n/(2g)}, \\
+  & \text{and} \quad p(\sigma^2) \propto \sigma^{-2}.
+\end{align*}
+$$
+
+This prior, however, neither is conjugate nor it is possible to compute the posterior in closed form. The `bas.lm` routine employs MCMC algorithms to approximate the posterior.
+
+As a highly suggested reading, check out the following paper:
+
+- https://www.tandfonline.com/doi/abs/10.1198/016214507000001337
+
+Before running the model there is another issue. How to treat the categorical variable? Suppose the said variable $x$ involves $K$ categories $C_1,\ldots,C_K$. We construct $K-1$ indicator variables, usually referred to as *dummy* variables, as follows,
+
+$$
+  \mathbb{I}_j(x) = 
+  \begin{cases}
+    1 \quad \text{ if } x = C_j \\
+    0 \quad \text{otherwise}
+  \end{cases}
+  \quad j=1,\ldots,K-1,
+$$
+where we only consider $K-1$ variables to avoid the issue of multicollinearity and leave the omitted one as the baseline. In practice, by turning on one dummy and off all the others, we sum up the intercept to the value of the coefficient on the dummy.
+
+As mentioned in the previous examples, `bas.lm` automatically operates this transformation for us.
+
+Back to the empirical exercise, since we are interested in prediction we need to sample some observations and use them to test our model. The following code splits the data into a (very large) **training** set and leave a few observations in the **test** set, then we estimate the model using the JZS prior and BMA.
+
+```{r}
+# Load (again!) `BAS`:
+library("BAS")
+
+# Disable scientific notation:
+options(scipen=999)
+
+# Set the seed for replication:
+set.seed(5)
+
+# Split the sample for prediction:
+nTest = 1000
+housingTestIndex = sample(1:nrow(housing),nTest)
+
+# Test sample:
+housingTest = housing[housingTestIndex,]
+
+# Training sample:
+housingTrain = housing[-housingTestIndex,]
+
+# Estimate the model:
+house.bas = bas.lm(median_house_value ~ ., data=housingTrain, 
+                   prior = "JZS", alpha = 1, modelprior = uniform())
+
+# Display the output:
+round(summary(house.bas), 3)
+```
+
+Once we estimate the model, we comment on the results as in Example 4.
+
+```{r}
+# Save and print the coefficients summaries:
+house.coef = coefficients(house.bas, estimator = "BMA")
+house.coef
+```
+
+- What does the output show? Do you remember how these quantities are computed?
+
+```{r}
+# Restore scientific notation:
+options(scipen=0)
+
+# Plot (some) marginal posteriors:
+par(mfrow = c(2, 2))
+plot(house.coef, subset = c(4,5,6,9), ask = F)
+```
+
+The last task involves prediction of . We use the `predict` function to generate the predictions for the observations in test set `housingTest` and specify `estimator="BMA"`. Then we plot the actual values of the target variable `median_house_value` against its predictions. Notice that accurate predictions would appear as points on the bisector, i.e. the $45°$ line.
+
+The second figure displays the predictions against the prediction errors (which we call "residuals" when computed on the training set). We would like to have no omitted information in the model which is correlated with the predictors, appearing as prediction errors that are constant, on average, as the predictions change. Furthermore, if our assumption of homoskedasticity is correct, we expect to see prediction errors that are equally spread about zero.
+
+```{r}
+# Compute the predictions:
+pred.house.bas <- predict(house.bas, housingTest, estimator="BMA")
+
+# Create the actual and predicted variables:
+actualValues = housingTest$median_house_value
+predictedValues = pred.house.bas$fit
+
+# Compute the residuals:
+residValues = predictedValues - actualValues
+
+# Plot actual vs predicted values:
+Pl1 = ggplot() + geom_point(aes(x = actualValues, y = predictedValues), color = "steelblue") +
+  xlab("Actual") + ylab("Predicted") + ggtitle("Predictions of median house values")
+
+# Plot the residuals:
+Pl2 = ggplot() + geom_point(aes(x = predictedValues, y = residValues), color = "darkred") +
+  xlab("Predicted") + ylab("Residuals") + ggtitle("Predicted VS Residuals")
+
+library(gridExtra)
+grid.arrange(Pl1, Pl2, ncol=2)
+```
