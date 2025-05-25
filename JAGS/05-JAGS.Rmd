@@ -1,0 +1,1015 @@
+---
+title: "Bayesian inference with JAGS"
+output:
+  html_document:
+    df_print: paged
+---
+
+[JAGS](https://en.wikipedia.org/wiki/Just_another_Gibbs_sampler) stands for "Just Another Gibbs Sampler" and is a tool for analysis of Bayesian hierarchical models using Markov Chain Monte Carlo (MCMC) simulation. It is an engine - more precisely, it is a *probabilistic programming language* ([PPL](https://en.wikipedia.org/wiki/Probabilistic_programming)) - for running [BUGS](https://en.wikipedia.org/wiki/WinBUGS) in Unix-based environments and allows users to write their own functions, distributions and samplers.
+
+In contrast to its ancestor, BUGS, JAGS has no graphical user interface (GUI). Thus, it must be run in a separate program, such as R. The following requirements are needed for using JAGS in R:
+
+1.  Download and install R and R Studio;
+2.  Download and install the latest version of [JAGS](https://sourceforge.net/projects/mcmc-jags/files/) depending on your operating system.
+3.  Install the `rjags` and `coda` packages in `R`.
+
+In the remainder, several models for which Gibbs sampling with `JAGS` can be used are introduced as examples.
+
+
+### Exercise 1: *Warm up*
+
+Do people prefer using the word "data" in the singular or plural? 
+
+Data journalists at *FiveThirtyEight* conducted a [poll](https://fivethirtyeight.com/features/elitist-superfluous-or-popular-we-polled-americans-on-the-oxford-comma/) to address, among others, this question. 
+
+In particular, they asked the respondents which of the following sentence they prefer:
+
+1.  Some experts say it's important to drink milk, but the data is inconclusive.
+2.  Some experts say it's important to drink milk, but the data are inconclusive.
+
+It turned out that 31 persons out of 35 prefer using data in the singular.
+
+We want to specify a proper model for doing inference on the probability $p$ that $y$ out of $n$ persons prefer one expression or the other.
+
+```{r}
+# Clear the workspace:
+rm(list=ls())
+
+# Set the seed:
+set.seed(1)
+
+# Set the data:
+n = 35
+y = 31
+
+# Create the list object:
+dataList = list(y = y, n = n)
+
+# Load the packages:
+library(rjags)
+library(coda)
+
+# Implement the JAGS code for this model
+model_string = textConnection("model{
+
+}")
+```
+
+Thus, we consider the Beta-Binomial model,
+
+$$
+\begin{align*}
+  y\mid p & \sim Bin(n,p) \\
+  p & \sim Be(\alpha, \beta)
+\end{align*}
+$$ 
+
+that was introduced in the first lab, where $\alpha=3$ and $\beta=1$. Then,
+
+1. write this model using the BUGS syntax and wrap it in the `textConnection()` function;
+2. fit the model using `jags.model`, draw the burn-in samples and check for convergence using `update`, and finally draw samples from the full conditional posterior with `coda.samples`;
+3. display diagnostics and trace plots;
+4. compute and display the posterior predictive density of $y_{new}\mid y$.
+
+Click on the [link](https://bookdown.org/kevin_davisross/bayesian-reasoning-and-methods/introduction-to-jags.html) for the reference and more.
+
+```{r}
+# Write the code here.
+```
+
+
+## Example 1: *Gaussian hierarchical prior*
+
+Consider the dataset `BostonHousing2` about housing in Boston, available through the `mlbench` library, see the [link](https://www.rdocumentation.org/packages/mlbench/versions/2.1-3.1/topics/BostonHousing). 
+
+The original data are 506 observations on 14 variables, `medv` being the target variable:
+
+- crim:	per capita crime rate by town;
+- zn: proportion of residential land zoned for lots over 25,000 sq.ft;
+- indus: proportion of non-retail business acres per town;
+- chas: Charles River dummy variable (= 1 if tract bounds river; 0 otherwise);
+- nox: nitric oxides concentration (parts per 10 million);
+- rm: average number of rooms per dwelling;
+- age: proportion of owner-occupied units built prior to 1940;
+- dis: weighted distances to five Boston employment centres;
+- rad: index of accessibility to radial highways;
+- tax: full-value property-tax rate per USD 10,000
+- ptratio: pupil-teacher ratio by town;
+- b: $1000(B-0.63)^{2}$ where $B$ is the proportion of blacks by town;
+- lstat: percentage of lower status of the population;
+- medv: median value of owner-occupied homes in USD 1000's;
+
+The corrected data set has the following additional columns:
+
+- cmedv: corrected median value of owner-occupied homes in USD 1000's;
+- town: name of town;
+- tract: census tract;
+- lon: longitude of census tract;
+- lat: latitude of census tract.
+
+In this example we consider a linear regression model where `cmedv` is taken as the dependent variable. Similarly, we may consider `crim` as the variable of interest.
+
+```{r}
+rm(list=ls())
+
+library(rjags)
+library(coda)
+
+# Import the dataset:
+library(mlbench)
+data(BostonHousing2)
+
+# Clean the data:
+bhousing = within(BostonHousing2,rm("medv","tract","town"))
+bhousing$chas = as.numeric(bhousing$chas)
+
+# Get the summary statistics:
+summary(bhousing)
+```
+
+We run a preliminary data analysis to check for any missing data and produce the basic summary statistics. Then, we visualize the variables' distribution using the boxplot and analyze the linear relationships among the variables with a correlation matrix.
+
+```{r}
+# Boxplots:
+par(mfrow=c(1, 1),pty="m")
+boxplot(scale(bhousing),las=3,main="Standardized covariates",cex.axis=0.75)
+
+# Ridgeline plot
+library(ggplot2)
+library(ggridges)
+library(tidyr)  # or library(reshape2)
+library(dplyr)
+
+bhousing_long <- as.data.frame(scale(bhousing)) %>%     # Convert to long format
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value")
+
+ggplot(bhousing_long, aes(x = Value, y = Variable, fill = Variable)) +
+  geom_density_ridges(scale = 1.2, alpha = 0.7, rel_min_height = 0.01, show.legend = FALSE) +
+  labs(title = "Ridgeline plot of standardized covariates", x = "Standardized Value", y = "") +
+  theme_minimal()
+
+# Correlation matrix:
+par(mfrow=c(1, 1),pty="s")
+image(1:ncol(bhousing),1:ncol(bhousing),cor(bhousing),
+      xlab="",ylab="",main="Correlation between predictors",
+      axes=FALSE)
+axis(1,1:ncol(bhousing),colnames(bhousing),las=2,cex.axis=0.9)
+axis(2,1:ncol(bhousing),colnames(bhousing),las=2,cex.axis=0.9)
+```
+
+The boxplots illustrate the presence of several extreme observations in many variables. In general, these observations could be quite insighful and should require further investigation when they are a few. 
+
+In this case, since we notice a substantial number of observations located far from the medians, we rather conclude that the variables display a strong skewness (e.g. `crim` and `b`) or kurthosis (e.g. `lon`, `lat`, and `rm`).
+
+The correlation matrix suggests that a positive linear relationship exists between `cmedv` and `rm`, and in a lesser way with `zn` and `b`, and a negative one between `cmedv` and `ptratio`. It follows that these may be good predictors of `cmedv`.
+
+We consider the following linear regression model,
+
+$$
+\begin{split}
+& y_i \sim \mathscr{N}(\alpha+ X_i \beta,\sigma^2) \\
+& \alpha \sim \mathscr{N}(0,100) \\
+& \beta_j \sim \mathscr{N}(0,\sigma_b^2)\\
+& \sigma^{-2} \sim \mathscr{G}a(0.01,0.01) \\
+& \sigma_b^{-2} \sim \mathscr{G}a(0.01,0.01) \\
+\end{split}
+$$
+
+which is a Gaussian *hierarchical model* such as the Normal--Inverse Gamma model, from which is different, however, because we put a prior on the variance $\sigma^2$ too. Thus, rather than fixing the prior variance for each $\beta_j$, the model **learns** it from the data. 
+
+Moreover, when the number of predictors is large or some predictors are weak, the hierarchical prior avoids **overfitting** by pulling the less relevant coefficients toward zero:
+
+- If the data do not strongly support large coefficients, the posterior will favor small values of $\sigma_b^2$;
+- A small $\sigma_b^2$ implies that most $\beta_j$ values are close to zero.
+- This is Bayesian shrinkage: the model prefers simplicity (i.e. smaller $\beta_j$), unless the data suggests otherwise.
+
+Like every PPL, JAGS allows the user either to store the model specification as a separate file using a text editor or to embed the BUGS model into R. The syntax is very simple and intuitive, see the [user guide](https://people.stat.sc.edu/hansont/stat740/jags_user_manual.pdf) for any help. For the purpose of learning JAGS we will always opt for the inline specification, below called `model_string`. Finally, we need to call the dependent variable, covariates, number of observations and number of covariates as declared the code, in our example being respectively `Y`, `X`, `n` and `p`, and store them in a list `dataList`.
+
+```{r}
+# Model settings:
+Y = bhousing$cmedv
+X = within(bhousing,rm("cmedv","lon","lat"))
+p = ncol(X)
+n = nrow(X)
+
+# Define the list:
+dataList = list(Y=Y,X=X,n=n,p=p)
+
+# Write the model specification:
+model_string = textConnection(
+"model{
+   
+   # Likelihood
+   for(i in 1:n){
+      Y[i] ~ dnorm(alpha+inprod(X[i,],beta[]),inv.var)
+      }
+    
+    # Priors
+    for(j in 1:p){
+      beta[j] ~ dnorm(0,inv.var.b)
+    }
+    
+    alpha ~ dnorm(0,0.01)
+    inv.var ~ dgamma(0.01, 0.01)
+    inv.var.b ~ dgamma(0.01, 0.01)
+    
+    sigma2 = 1/inv.var
+    sigma2_b = 1/inv.var.b
+    
+ }")
+```
+
+Notice that BUGS requires the precision, instead of the variance, to define the normal distribution.
+
+With little implementation effort we are ready to estimate the model. We can modify the settings, e.g. the burn in period `burn`, total number of iterations `n.iter`, number of adaptations `n.adapt`, the thinning `thin`, and number of chains to be produced `n.chains`.
+
+```{r}
+# Set the options:
+burn = 5000
+n.iter = 10000
+n.adapt = 100
+thin = 10
+n.chains = 1
+
+# Create a `jags` object:
+model = jags.model(model_string,data=dataList,n.chains=n.chains,n.adapt=n.adapt)
+
+# Check for convergence:
+update(model,n.iter=burn)
+
+# Save the output according to the arguments:
+samples = coda.samples(model,variable.names=c("alpha","beta","sigma2","sigma2_b"),thin=thin,n.iter=n.iter)
+```
+
+We have saved the output in `samples`, where the chains are stored. The details of the model are stored in `model`. Using `summary` we can view the details concerning the samples that were produced and the empirical mean, standard deviation, and quantiles of the parameter distributions.
+
+```{r}
+# Traceplot and posterior density:
+for(k in 0:7){ plot(samples[,(2*k+1):(2*(k+1))]) }
+```
+
+```{r}
+# Autocorrelation function:
+for(k in c(3,7)){ autocorr.plot(samples[,(2*k+1):(2*(k+1))]) }
+```
+
+Through the trace plots we aim to evaluate the [**mixing**](https://en.wikipedia.org/wiki/Markov_chain_mixing_time) of the samples. It relates to the speed by which the sequence of draws converges to the stationary distribution, in our case being the full conditional posterior.
+
+```{r}
+# Complete summary:
+summary(samples)
+```
+
+Recall that the naive standard error is the standard deviation ($SD$) of a coefficient estimate $\hat{\beta}_j$:
+
+$$
+\text{Naive SE} = \frac{\text{SD}(\hat{\beta}_j)}{\sqrt{S}}
+$$
+where $S$ is the number of MCMC samples. `Time-series SE` is the corrected standard error of the mean, accounting for autocorrelation between samples, where in practice the posterior standard deviations are divided by the effective sample size.
+
+Indeed, if the samples appeared to be autocorrelated over time, we might desire to increase even more the number of iterations and burn-in period to get less dependence among subsequent draws (at the cost of increasing the computational time).
+
+The effective sample size (ESS) measures how much information content is loss due to the correlation in the sequence. In fact, we expect that our effective sample size will be smaller than the observed sample size when the autocorrelation is large. 
+
+The ESS thus returns the number of independent samples with the same estimation power as the `n.iter` autocorrelated samples obtained from the MCMC. According to its definition, it is desirable to have an ESS that is close, or even larger than the sample size `n`. On the other hand, it goes to zero if the autocorrelation in the chain is substantial.
+
+```{r}
+# Effective sample size
+effectiveSize(samples)
+```
+
+
+## Example 2: *Bayesian LASSO prior*
+
+First, we load the Major League Baseball data from the 1986 and 1987 seasons from the `hitters` dataset in the `ISLR2` package. A data frame with 322 observations of major league players on the following 20 variables:
+
+- `AtBat`: Number of times at bat in 1986
+- `Hits`: Number of hits in 1986
+- `HmRun`: Number of home runs in 1986
+- `Runs`: Number of runs in 1986
+- `RBI`: Number of runs batted in in 1986
+- `Walks`: Number of walks in 1986
+- `Years`: Number of years in the major leagues
+- `CAtBat`: Number of times at bat during career
+- `CHits`: Number of hits during career
+- `CHmRun`: Number of home runs during career
+- `CRuns`: Number of runs during career
+- `CRBI`: Number of runs batted in during career
+- `CWalks`: Number of walks during career
+- `League`: A factor with levels A and N indicating player's league at the end of 1986
+- `Division`: A factor with levels E and W indicating player's division at the end of 1986
+- `PutOuts`: Number of put outs in 1986
+- `Assists`: Number of assists in 1986
+- `Errors`: Number of errors in 1986
+- `Salary`: 1987 annual salary on opening day (in thousands of dollars)
+- `NewLeague`: A factor with levels A and N indicating player's league at the beginning of 1987
+
+We are interested in determining which characteristics of a hitter might explain his salary. So the dependent variable in our model is `Salary`.
+
+```{r}
+rm(list=ls())
+
+library(rjags)
+library(coda)
+
+# Load the data
+library(ISLR2)
+data(Hitters)
+Hitters = na.omit(Hitters)  # Remove rows with missing Salary
+
+# Some descriptive
+summary(Hitters)
+```
+
+As the dataset includes many variables (20), we are interested in excluding a few and focus on the most important determinants. The following model is designed to achieve this goal when we are in high-dimensional settings.
+
+Consider the Bayesian Least Absolute Shrinkage and Selection Operator (LASSO) model,
+
+$$
+\begin{split}
+&  y_i |\alpha,\beta_j,\sigma^2 \sim \mathscr{N}(\alpha+ X_i \beta,\sigma^2) \\
+& \alpha \sim \mathscr{N}(0,100) \\
+& \beta_j|\sigma,\lambda \sim \mathscr{DE}(0,\sigma/\lambda)\\
+& \sigma^{2} \sim \mathscr{IG}(0.01,0.01)  \\
+& \lambda \sim \mathscr{Ga}(0.01,0.01)  \\
+\end{split}
+$$
+where $\mathscr{DE}(0,\sigma/\lambda)$ denotes a double-exponential ([Laplace](https://en.wikipedia.org/wiki/Laplace_distribution)) distribution with location 0 and scale $\sigma/\lambda$.
+
+As the Laplace distribution is sharply peaked at zero means, this prior assigns a higher probability density to coefficient values being very close to zero, compared to, say, a Gaussian prior. This "pulls" or "shrinks" many coefficients towards zero. In addition, the heavy tails still allow for a large coefficient, preventing over-shrinkage of truly important predictors.
+
+This is also a hierarchical model as, similarly to $\sigma_b^2$ in the Gaussian hierarchical model, a layer is added with the introduction of the prior on $\lambda$. The key idea is that penalization should be relative to the noise level $\sigma^2$. 
+
+In particular:
+
+- If noise is high (large $\sigma^2$), then we should shrink less, since the data are noisier and less informative.
+- If noise is low (small $\sigma^2$), then we can shrink more, because we trust the data more.
+
+For more information, take a look to the original [paper](https://doi.org/10.1198/016214508000000337) and the JAGS example at this [link](https://jbds.isdsa.org/public/journals/1/html/v4n1/tong/).
+
+```{r}
+# Model settings:
+Y = as.numeric(scale(Hitters$Salary))
+X = scale(model.matrix(Salary ~ ., data = Hitters)[, -1])  # Remove intercept column and "dummify"
+p = ncol(X)
+n = nrow(X)
+
+# Define the list:
+dataList = list(Y=Y,X=X,n=n,p=p)
+
+# Implement the JAGS code for this model
+model_string = textConnection("model{
+
+  # Likelihood
+  for(i in 1:n){
+    Y[i] ~ dnorm(mu[i], inv.sigma2)
+    mu[i] = alpha + inprod(X[i,], beta[])
+  }
+  
+  # Prior for alpha
+  alpha ~ dnorm(0, 0.01)
+  
+  # Prior for beta
+  for(j in 1:p){
+    beta[j] ~ ddexp(0, inv.sigma/inv.lambda)
+  }
+
+  # Prior for inv.sigma2 and lambda
+  inv.sigma2 ~ dgamma(0.01, 0.01)
+  lambda ~ dgamma(0.01, 0.01)
+  
+  inv.lambda = 1/lambda
+  inv.sigma = sqrt(inv.sigma2)
+  sigma = 1/sqrt(inv.sigma2)
+
+}")
+```
+
+We are ready to initialize JAGS and run it.
+
+```{r}
+# Set the options:
+burn = 5000
+n.iter = 10000
+n.adapt = 100
+thin = 10
+n.chains = 1
+
+# Create a `jags` object:
+model = jags.model(model_string,data=dataList,n.chains=n.chains,n.adapt=n.adapt)
+
+# Check for convergence:
+update(model,n.iter=burn)
+
+# Save the output according to the arguments:
+samples = coda.samples(model,variable.names=c("alpha", "beta", "sigma"),thin=thin,n.iter=n.iter)
+```
+
+Again, we look at the trace plots...
+
+```{r}
+# Traceplot and posterior density:
+samples_idx = sample(0:9,3)
+for(k in samples_idx){ plot(samples[,(2*k+1):(2*(k+1))]) }
+```
+
+and check the autocorrelation function.
+
+```{r}
+# Traceplot and posterior density:
+for(k in samples_idx){ autocorr.plot(samples[,(2*k+1):(2*(k+1))]) }
+```
+
+As a decision rule, we can compute credible intervals at the 95% level and check whether the intervals encompass zero, that is if the zero lies within the intervals. If not, we conclude that there exists a significant relationship between hitters' salaries and that variable.
+
+```{r}
+# Compute posterior summaries
+CI = apply(samples[[1]], 2, function(x) {
+  quantile(x, probs = c(0.025, 0.5, 0.975))
+})
+
+# Transpose and convert to dataframe
+CI = as.data.frame(t(CI))
+
+# Rename columns for clarity
+colnames(CI) = c("Lower_2.5%", "Median", "Upper_97.5%")
+
+# Print the result
+print(CI)
+```
+
+The `ggs_caterpillar` function from the package `ggmcmc` could also be used to display the credible intervals for a class of parameters of interest, e.g. $\beta_1,\ldots,\beta_p$. By default, it plots credible intervals with **thin** lines at the 95% level and credible intervals with **thick** lines at the 90% level.
+
+**Warning**: it is not clear why the name on the horizontal axis is labelled `HPD` (highest posterior density), as the credible intervals are in fact displayed.
+
+```{r}
+# Convert the results from JAGS into a `ggmcmc` object
+library(ggmcmc)
+
+beta_labels = plab("beta", list(Variable = colnames(Hitters)[c(1:18, 20)]))
+ggmcmc_object <- ggs(samples, par_labels = beta_labels, family = "beta")
+ 
+# Create a "caterpillar plot"
+ggs_caterpillar(D = ggmcmc_object, thick_ci = c(0.05, 0.95), thin_ci = c(0.025, 0.975),)
+```
+
+**Remarks:**
+
+- The function `update` performs burn-in iterations for the Markov chain. After the burn-in period the chain is supposed to converge to its stationary distribution. Performance diagnostics such as the trace plot have to be inspected to check convergence.
+
+- The adaptive iterations (see `n.adapt`) that JAGS performs are not burn-in iterations nor samples to be used for posterior inference. The documentation reports that *The sequence of samples generated during this adaptive phase is not a Markov chain, and therefore may not be used for posterior inference on the model*. The adaptive phase is only suppose to calibrate the model *ex ante* to improve efficiency of the sampling.
+
+
+### Exercise 2
+
+Consider the Bayesian linear regression model with Normal -- Inverse Gamma priors (see *Bayesian Core*, Chapter 3, p. 54):
+
+$$
+\begin{align*}
+&  y_i \sim \mathscr{N}(\alpha+ X_i \beta,\sigma^2), \\
+& \alpha \sim \mathscr{N}(0,100), \\
+& \beta_j \sim \mathscr{N}(0,100), \\
+& \sigma^2 \sim \mathscr{IG}(0.01,0.01).
+\end{align*}
+$$
+
+For comparison, in the lab `04-Regression` (*Example 1*) we introduced a Bayesian linear regression model where the variance $\sigma^2$ was assumed to be known.
+
+For this model, it is possible to derive analytically the marginal posteriors for $\beta$ and $\sigma^2$, but in this exercise we will use JAGS:
+
+- implement the model by writing the JAGS code, run estimation and store the samples for $\beta$ and $\sigma^2$;
+- compare the full conditional posteriors of $\beta$ from this model with those obtained from the Bayesian LASSO, using for example a caterpillar plot.
+- plot the posterior predictive of a new data point $y_{new}$.
+
+
+## Example 3: *Binomial logistic regression*
+
+A **generalized linear model** (GLM) is a generalization of the ordinary linear regression model where a **link function** is used to relate the response to a number of independent variables. For example, the logistic, probit, and Poisson regression belong to this broad class.
+
+In particular, **logistic regression** commonly refers to a model for dichotomous data, that is when the dependent variable $y$ only takes values equal to 0 or 1. However, such a denomination is misleading because it comprises a broader class of models where the logistic function is used as the **link function**, e.g. the binomial and Bernoulli regressions.
+
+In particular, for binary variables the standard linear model would predict values above 1 or below 0. Thus we employ the logistic, or logit link function to bound the response variable between 0 and 1,
+
+$$
+\begin{align*}
+  z_i &= X\beta, \\
+  p_i &= \frac{1}{1+e^{-z_i}},
+\end{align*}
+$$
+where $z_i = \log\left(\frac{p_i}{1-p_i}\right)$ is also known as the log-odds ratio and $p_i\in[0,1]$ is the probability of $y_i$ being equal to 1 for the $i$-th observation, computed as the logit transformation of $z_i$.
+
+We consider the binomial regression model,
+
+$$
+\begin{align*}
+  & y_i \mid p_i \overset{ind}\sim \mathscr{B}in(p_i,k), \\
+  & \log\left(\frac{p_i}{1-p_i}\right) = x_i \beta, &\qquad i=1,\ldots,n \\[15pt]
+  &\beta_j \overset{iid}\sim \mathscr{N}(0,100), &\qquad j=1,\ldots,p
+\end{align*}
+$$
+
+where $k$ denotes the number of trials, taken as fixed, and we denote with $\text{logit}(p_i) = x_i \beta$ to relax the notation which is used to specify the model in the BUGS syntax.
+
+We consider real mortality data to model the count of deaths for moths depending on the `sex` and given the `dose` of a poisonous substance. The data are taken from [Royla and Dorazio](https://www.mbr-pwrc.usgs.gov/pubanalysis/roylebook/chapters.htm), Chapter 2, which is available online. In our model we are interested in a sequence of $K = 20$ trials, thus we write the code accordingly.
+
+```{r}
+# Clear the workspace:
+rm(list=ls())
+
+# Set the seed:
+set.seed(1)
+
+# Load the packages:
+library(rjags)
+library(coda)
+
+# Create the dependent variable:
+Y = c(1, 4, 9, 13, 18, 20, 0, 2, 6, 10, 12, 16)
+
+# Create the independent variables:
+sex = c(rep("male", 6), rep("female", 6))
+dose = rep(0:5, 2)
+X = cbind(dose,sex=as.integer(sex=="male"))
+
+# Settings
+
+n = length(Y)
+P = ncol(X)
+k = 20
+
+burn = 5000
+n.iter = 2000
+n.chains = 3
+n.adapt = 100
+thin = 2
+```
+
+We write the BUGS code, as done previously, for the model above.
+
+```{r}
+model_string = textConnection(
+"model {
+    
+  # Likelihood
+  for (i in 1:n) {
+    Y[i] ~ dbin(p[i],k)
+    logit(p[i]) = beta0 + X[i,] %*% beta
+  }
+  
+  # Prior
+  beta0 ~ dnorm(0,0.001)
+  for (j in 1:P) {
+    beta[j] ~ dnorm(0,0.01)
+  }
+}")
+```
+
+Therefore we fit the model. Notice that `n.chains = 3`, hence we will produce three different sequences of draws. This approach is good if the user wants to initialize sampling with different values, perhaps exploring better every region of the parameter support.
+
+```{r}
+# Set up the data
+dataList = list(Y=Y,X=X,n=n,P=P,k=k)
+
+# Compile the model
+model = jags.model(model_string,data=dataList,n.chains=n.chains,n.adapt=n.adapt)
+
+# Model burn-in phase
+update(model,n.iter=burn)
+
+# Sampling from the posterior
+samples = coda.samples(model,variable.names=c("beta0","beta","p"),n.iter=n.iter,thin=thin)
+```
+
+The usual trace plot and density are exhibited as follows.
+
+```{r}
+# Plot the samples:
+samples_idx = sample(4:15,2)
+plot(samples[,samples_idx])
+```
+
+We compute the posterior mean and credible intervals for the intercept and two other coefficients. As shown below, this is quite easy. Notice that such metrics are computed based on all the chains, not only to a single one. Conversely, if one wants to produce them separately for each chain, she has to access e.g. the first chain as `samples[[1]]`.
+
+```{r}
+# Compute posterior mean and 95% CI
+postMean = colMeans(as.matrix(samples))
+CI = apply(as.matrix(samples),2,quantile,c(0.025, 0.975))
+rbind("Mean"=postMean,CI)
+
+# Alternatively
+#summary(samples)
+```
+
+As a matter of fact, we can plot the density obtained from each chain separately as follows.
+
+```{r}
+# Set a color palette:
+colorsPalette = palette(rainbow(n.chains))
+
+# Plot the chain full conditional posteriors:
+plot(density(unlist(samples[[1]][,"beta[2]"])),col=colorsPalette[1],
+     main="Chain-specific posterior density for beta[2]")
+for (j in 2:n.chains) {
+  lines(density(unlist(samples[[j]][,"beta[2]"])),col=colorsPalette[j])
+}
+```
+
+What are the effects of `dose` and `sex` on the deaths? Concerning `sex`, `beta[[2]]` is always positive, hence being males increases the probability of death compared to females. Relative to `dose`, we can help ourselves with the following graph where we display the probability of death across $K=20$ independent experiments.
+
+```{r}
+# Set some variables:
+orderDose = order(X[,1])
+colorSex = ifelse(sex=='male','blue','red')
+
+# Plot actual VS predicted number of deaths:
+plot(X[,1],Y,pch=19,col=colorSex,xlab="Dose",ylab="Death count")
+points(X[orderDose,1],
+      k * boot::inv.logit(postMean[3]+postMean[2]*1+postMean[1]*X[orderDose,1]),
+      col="blue",pch=2)                 # `inv.logit()` from the `boot` package
+points(X[orderDose,1],
+      k * boot::inv.logit(postMean[3]+postMean[2]*0+postMean[1]*X[orderDose,1]),
+      col="red",pch=6)
+
+legend("topleft",legend=c("Males","Females"),lty=1,lwd=2,col=c("blue","red"),bty="n")
+```
+
+In particular, we compare observed deaths with model-based predictions of expected deaths for males and females, across different doses. Recall that if $Y\sim\mathscr{Bin}(p,k)$, then $E(Y)=kp$. Therefore `k * inv.logit(beta0 + beta2*sex + beta1*dose)` computes the expected number of deaths.
+
+By inspecting the graph we conclude that males and females both die more as the number of doses increase, but males display a higher mortality given the same number of doses, even when no dose is given.
+
+
+### Exercise 3: *Example 3 continued*
+
+1. Consider an interaction between sex and dose by adding the term $\beta_3 \times x_{i1}\times x_{i2}$ in the model specified above. Remember to include $\beta_3$ in your parameters to watch vector. Is $\beta_3$ estimated with acceptable accuracy according to the posterior?
+2. An increase in the death rate is mostly associated to an increase in the dose. Change the prior distribution on $\beta_2$ to reflect the fact that the parameter should be positive. Do you notice any difference in the posterior distribution of $\beta_2$ after this modification?
+3. ☕️ It is common to estimate the LD-50, that is the dose at which 50% of the animals die. Estimate the LD-50 for males and females with uncertainty. Hint: produce a 95% CI for the LD50 for each group.
+
+
+### Exercise 4: *Bernoulli regression*
+
+Consider the Bernoulli regression model,
+
+$$
+\begin{align*}
+  & y_i \mid p_i \overset{ind}\sim \mathscr{B}e(p_i), &\qquad i=1,\ldots,n \\[15pt]
+  1) \quad & \log\left(\frac{p_i}{1-p_i}\right) = x_i \beta, &\qquad \rightarrow\text{logistic link} \\
+  2) \quad & \Phi^{-1}(p_i) = x_i \beta, &\qquad \rightarrow\text{probit link} \\[15pt]
+  &\beta_j \overset{iid}\sim \mathscr{N}(0,100), &\qquad j=1,\ldots,p
+\end{align*}
+$$
+
+for responses $y_i$ that can take values equal to 0 or 1 and where the logistic or probit link function might be used. Notice that, in the probit case, $\Phi(\cdot)$ denotes the normal c.d.f. and, hence, $\Phi(\cdot)^{-1}$ its quantile.
+
+We load the `titanic` dataset about the survival of the passengers of the Titanic; more information are available [here](https://cran.r-project.org/web/packages/titanic/readme/README.html).
+
+Most of the variables are not useful for a quantitative analysis, thus we remove them. Afterwards, we also remove passengers who report missing values about their age. We would like to set up a model to predict the survival of a passenger, `Survived`, based on the attributes `Pclass` i.e. the passenger's class, `Sex` and `Age`.
+
+```{r}
+rm(list=ls())
+
+# Load the packages:
+library(rjags)
+library(coda)
+
+# Load the data:
+library(titanic)
+data = titanic_train[,c(2,3,5,6)]
+data = data[-which(is.na(data$Age)),]
+
+# Summary statistics:
+summary(data)
+
+# Training and test set:
+TrainData = data[nrow(data)-1,]
+TestData = data[nrow(data),]
+```
+
+Complete the following tasks:
+
+1. Fit the Bernoulli logistic model, or the Bernoulli probit model, to the data in `TrainData`, i.e. choosing one between the specifications 1 and 2 in the formulas above. Hint: in the `BUGS` syntax the logit link function is called with `logit` and the probit link function is called with `probit`;
+2. Produce the usual diagnostics, namely the trace and autocorrelation plot, to check for the convergence of the chain(s). Eventually, increase the number of iterations;
+3. ☕️ Compute the posterior predictive density of the single datum in `TestData`.
+
+```{r}
+# Write you code here.
+```
+
+
+## Example 5: *Spike and slab prior*
+
+The Bayesian model selection was introduced in the context of the `BAS` library. After eliciting a model prior $\pi(M_j)$, for each model $j=1,\ldots,M$, we are able to compute its posterior distribution $\pi(M_j \mid \mathbf{y})$. 
+
+However, $M=2^p$ in a linear regression model with $p$ covariates. Thus, the number of models quickly increases and model complexity, i.e. the number of parameters, increases as well, which may be detrimental for estimation.
+
+In this example we consider a different approach where some coefficients may be shrunk toward zero, so the model performs **variable selection**. This methodology differs from the hierarchical and Bayesian LASSO models introduced above in that it allows the user to exactly set some coefficient equal to zero.
+
+We index each of the possible $2^p$ combinations through the vector
+
+$$
+\mathbf{\gamma} = \left(\gamma_1,\dots,\gamma_p\right),
+$$
+
+where $\gamma_j = 0$ if $\beta_j = 0$ and $\gamma_j = 1$ if $\beta_i \neq 0$ and consider the mixture prior $\pi(\beta,\gamma) = \pi(\beta\mid\gamma)\pi(\gamma)$, which is specified below.
+
+The linear regression model with spike & slab priors is:
+
+$$
+\begin{align*}
+  & \beta_j \mid \gamma_j \overset{ind}\sim (1-\gamma_j)\,\delta_{(0)} + \gamma_j\,\mathscr{N}\left(0,     \sigma^2_{\beta_j}\right), \\
+  & \gamma_j \mid \theta_j \overset{ind}\sim \mathscr{B}e\left(\theta_j\right), \\[5pt]
+  & \theta_{j} \overset{iid}\sim p\left(\theta_j\right),
+\end{align*}
+$$
+
+where $\theta_j$ is a probability which determines whether $\beta_j$ is nonzero and hence whether the corresponding covariate will be included in the model,  $\delta_{\{0\}}$ is a Dirac delta, i.e. $\delta_{(0)}(x) = 0$ if $x\neq 0$ while it shows infinite mass for $x=0$. A common choice for $\theta_j$ is the uniform distribution over $\left(0,1\right)$, or the $\mathscr{B}eta(1,1)$ distribution.
+
+In the following example, we consider again the `Hitters` dataset and fit a linear regression model with a spike and slab prior on the coefficients.
+
+```{r}
+rm(list=ls())
+
+#library(mlbench)
+library(rjags)
+library(coda)
+
+# Load the data
+library(ISLR2)
+data(Hitters)
+Hitters = na.omit(Hitters)  # Remove rows with missing Salary
+```
+
+We have already performed a preliminary analysis of this dataset, which involves many variables that are well correlated with `cmedv`, the target variable. The spike and slab prior is thus appealing as it shrinks to zero the predictors that are not relevant.
+
+```{r}
+# Model settings:
+Y = as.numeric(scale(Hitters$Salary))
+X = model.matrix(Salary ~., data = Hitters)[,-1]
+P = ncol(X)
+N = nrow(X)
+
+# JAGS inputs:
+var_beta=rep(1, P)
+dataList = list(Y=Y,X=X,var_beta=var_beta,N=N,P=P)
+
+burn = 5000
+n.iter = 15000
+n.adapt = 1000
+thin = 10
+n.chains = 1
+```
+
+The code for this model is quite challenging compared to the previous ones. Firstly, we have to combine the probit model with the spike & slab priors, then we need to track the nonzero coefficients in all models. This task is accomplished using a binary encoding which is explained below.
+
+```{r}
+model_string = textConnection(
+"model {
+
+  # Likelihood 
+  for (i in 1:N) {
+  	Y[i] ~ dnorm(beta0+inprod(X[i,],beta[]),inv.var.y)
+  }
+
+  # Model encoding
+  for (j in 1:P) {                        # at every iteration, recognise the model
+  	inclusionindex[j] = g[j]*pow(2,j)     # given the selected variables
+  }
+  mdl = 1 + sum(inclusionindex[])
+  
+  # Priors
+  inv.var.y ~ dgamma(0.01,0.01)
+  beta0 ~ dnorm(0,0.01)
+  
+  for(j in 1:P) {
+  	inv_var_beta[j] = 1/var_beta[j]
+  }
+
+  for(j in 1:P) {
+  	g[j] ~ dbern(theta[j])
+  	theta[j] ~ dunif(0,1)
+  	betaTemp[j] ~ dnorm(0,inv_var_beta[j])
+  	beta[j] = g[j]*betaTemp[j]
+  }
+  
+}")
+
+```
+
+This time, we also specify the starting values for the parameters in `inits`, then we sample.
+
+```{r}
+# Specify the initial values:
+inits = list(beta0=0,betaTemp=rep(0,P),g=rep(0,P),theta=rep(0.5,P))
+
+# Initialization and burn-in step:
+model = jags.model(model_string,data=dataList,n.adapt=n.adapt,inits=inits,n.chains=n.chains) 
+update(model,n.iter=burn)
+
+# Produce the samples
+param = c("beta0","beta","mdl")
+samples = coda.samples(model=model,variable.names=param,n.iter=n.iter,thin=thin)
+```
+
+We view the results through the trace plot and the approximated densities. If we produce `n.chains` sequences of samples, we may notice that some sequence have different trajectories when initialized from different values.
+
+```{r}
+# `beta` traceplots and posteriors
+samples_idx = sample(1:12,12)
+par(mfrow=c(3,3))
+plot(samples[,samples_idx])
+```
+
+In the next example we consider a method for selecting the best model among those that were estimated. In fact, for each sample the algorithm may have set the value of a parameter equal to zero, or nonzero. Hence, a possibly different model, depending on which variables are active, is sampled using the spike and slab prior.
+
+
+## Example 6: *Spike & slab prior in a probit regression*
+
+In the following application we consider the `reach` dataset: 
+
+*Rheumatoid arthritis is an autoimmune disease characterized by chronic synovial inflammation and destruction of cartilage and bone in the joints. The Rotterdam Early Arthritis Cohort (REACH) study was initiated in 2004 to investigate the development of rheumatoid arthritis in patients with early manifestations of joint impairment. Information regarding basic patient characteristics, serological measurements, and patterns of disease involvement at baseline has been gathered in 681 recruited patients.*
+
+In particular, we aim to understand which of the following 12 factors are potentially associated with the development of **rheumatoid arthritis**:
+
+-   ACCP (cyclic citrullinated peptide antibody),
+-   age,
+-   ESR (erythrocyte sedimentation rate, is the rate at which red blood cells sediment in a period of one hour),
+-   DC (duration of complaints in days),
+-   stiffness (duration of morning stiffness in minutes),
+-   RF (rheumatoid factor),
+-   gender,
+-   Sym (symmetrical pattern of joint inflammation; yes/no),
+-   SJC (swollen joint count),
+-   TJC (tender joint count),
+-   BCPH (bilateral compression pain in hands; yes/no),
+-   BCPF (bilateral compression pain in feet; yes/no).
+
+Because the response variable is binary, i.e. indicating whether the patient has developed or not this disease, we need to use a logit or probit link function, as introduced in Exercise 4.
+
+```{r}
+rm(list=ls())
+
+library(rjags)
+library(coda)
+
+# Import the data
+reach = read.table("reach.txt", header=T)
+reach$gender = ifelse(reach$gender == 1,0,1)
+
+# Define the inputs
+
+p = 12
+N = nrow(reach)
+
+X = reach[1:N,1:12]
+Y = reach[1:N,13]
+
+var_beta=rep(1, p)
+
+dataList = list(Y=Y,X=X,var_beta=var_beta,N=N,p=p)
+
+# Input for JAGS:
+
+burn = 5000
+n.iter = 10000
+thin = 10
+```
+
+Firstly, we have to combine the probit model with the spike & slab priors, then we need to track the nonzero coefficients in all models. This task is accomplished using a binary encoding which is explained below.
+
+```{r}
+model_string = textConnection(
+"model {
+
+  # Likelihood 
+  for (i in 1:N) {
+  	Z[i] = phi( beta0 + inprod(X[i,],beta) )
+  	Y[i] ~ dbern(Z[i])
+  }
+
+  # Model encoding
+  for (j in 1:p) {
+  	inclusionindex[j] = g[j]*pow(2,j)
+  }
+  mdl = 1 + sum(inclusionindex[])
+  
+  # Priors
+  beta0 ~ dnorm(0,0.01)
+  
+  for(j in 1:p) {
+  	inv_var_beta[j] = 1/var_beta[j]
+  }
+
+  for(j in 1:p) {
+  	g[j] ~ dbern(theta[j])
+  	theta[j] ~ dunif(0,1)
+  	
+  	betaTemp[j] ~ dnorm(0,inv_var_beta[j])
+  	beta[j] = g[j]*betaTemp[j]
+  }
+}")
+
+```
+
+Specify the starting values for the parameters in `inits` and sample.
+
+```{r}
+# Initial values
+inits = list(beta0=0,betaTemp=rep(0,p),g=rep(0,p),theta=rep(0.5,p))
+
+model = jags.model(model_string,data=dataList,n.adapt=100,inits=inits) 
+update(model,n.iter=burn)
+
+# Which parameters to store?
+param = c("beta0","beta","g","mdl")
+samples = coda.samples(model=model,variable.names=param,n.iter=n.iter,thin=thin)
+```
+
+```{r}
+# Trace plot and posteriors
+par(mfrow=c(3,3))
+plot(samples[,1:12])
+```
+
+We immediately notice that some coefficients are zero, e.g. `beta[2]` and `beta[5]`, while some are not, like `beta[1]` and `beta[8]`. However, it is possible that the coefficient is sampled as zero most of the times, but sometimes it is not, ee for example `beta[9]` which displays light bimodality.
+
+**How to select a variable?**
+
+For example, the median probability model (MPM) picks the variables with an estimated posterior inclusion probability that is higher than $0.5$. The posterior probability of inclusion corresponds to the posterior mean of the $\gamma_j$, which are called `g` in the code. In practice, we use a threshold to discriminate among the variables.
+
+```{r}
+# Compute the posterior mean for g[j]:
+gsamples = samples[[1]][,14:25]
+post_mean_g = apply(gsamples, 2, "mean")
+
+# Print the probabilities of inclusion:
+post_mean_g
+```
+
+We can visualize them with a nice chart.
+
+```{r}
+# Load the library:
+library(ggplot2)
+
+postmeang_df = data.frame(value=post_mean_g,var=colnames(X))
+p1 = ggplot(data=postmeang_df,aes(y=value,x=var,fill=var)) + 
+  geom_bar(stat="identity") + 
+  geom_hline(mapping=aes(yintercept=0.5),col=2,lwd=1.1) +
+  coord_flip() + theme_minimal() + theme(legend.position="none") + 
+  ylab("Posterior inclusion probabilities") + xlab("")
+p1
+```
+
+We select the variables such that the posterior probability of inclusion is greater than $0.5$.
+
+```{r}
+# Select best model according to MPM
+mp_SpSl = which(post_mean_g>0.5)
+post_mean_g[mp_SpSl]
+```
+
+Alternatively, we may use the highest posterior density (HPD) model. In such a case, the model with the highest posterior probability is chosen. Recall that we have kept track of the models using the binary encoding in `mdl`, that is
+
+$$
+\text{mdl} = 1 + 2^1 + \dots + 2^{p}.
+$$
+
+The chain corresponding to `mdl` is stored and can be viewed. We are interested in the model that is visited most times, i.e. the HPD model.
+
+```{r}
+# Trace plot and density for `mdl`:
+plot(samples[,"mdl"])
+```
+
+How many unique models have been visited throughout the chain?
+
+```{r}
+# Get the number of unique models:
+length(table(samples[,"mdl"]))
+```
+
+What is the observed frequency, i.e. the posterior probability of each model? We can plot the frequency with a barplot where the model encoding is reported on the `x` axis.
+
+```{r}
+# Post frequency of visited models
+visited_models = sort(table(samples[,"mdl"]),decreasing=TRUE)
+barplot(visited_models/sum(table(samples[,"mdl"])),
+        xlab="Model encoding",ylab="Posterior probability")
+```
+
+With the following code, we select the HPD model:
+
+```{r}
+# Get the unique profiles and sort the results
+unique_model = unique(as.matrix(gsamples),MARGIN=1)
+freq = apply(unique_model,1,function(b) sum(apply(gsamples,1,function(a) all(a == b))))
+
+# View the unique models and their frequency:
+#cbind(unique_model[order(freq,decreasing = T),], sort(freq,decreasing = T))
+
+# Select the HPD model and print the variable names:
+colnames(X)[as.logical(unique_model[which.max(freq),])]
+HDPmodel = c(1:12)[as.logical(unique_model[which.max(freq),])]
+
+# Display the variables' number:
+HDPmodel
+```
